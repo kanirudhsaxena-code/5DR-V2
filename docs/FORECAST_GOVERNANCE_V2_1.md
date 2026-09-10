@@ -67,3 +67,7 @@ V2.1 does not change Price/Structure, PVPO, Participation, Macro/Catalyst scorin
 The 10 Sep 2026 12:07 first production V2 forecast remains immutable and is classified as `INTRADAY_SNAPSHOT`.
 
 Future forecasts use model version `5DR_V2_1`.
+
+
+## V2.1.1 output control
+The V2.1 governance remains unchanged. New releases additionally require the V2.1.1 output contract with explicit Forecast Assessment and Recommendation Assessment. Historical forecasts remain immutable.
