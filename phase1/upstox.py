@@ -20,6 +20,35 @@ BASE = 'https://api.upstox.com'
 class PipelineError(RuntimeError):
     pass
 
+def safe_failure(error):
+    """Return only allowlisted diagnostics, never arbitrary exception text."""
+    messages = {
+        'UPSTOX_ANALYTICS_TOKEN is missing': 'TOKEN_MISSING',
+        'Analytics Token expired, invalid, or lacks access': 'AUTH_REJECTED',
+        'Upstox network request failed': 'NETWORK_FAILED',
+        'Invalid JSON response': 'INVALID_JSON',
+        'Unexpected Upstox response schema': 'RESPONSE_SCHEMA_INVALID',
+        'No active NIFTY expiries returned': 'NO_ACTIVE_EXPIRIES',
+        'Contract array missing': 'CONTRACT_SCHEMA_INVALID',
+        'Candle schema mismatch': 'CANDLE_SCHEMA_INVALID',
+        'Candle array missing': 'CANDLE_ARRAY_MISSING',
+        'Historical daily candles are empty': 'DAILY_CANDLES_EMPTY',
+        'Option chain is empty': 'OPTION_CHAIN_EMPTY',
+        'Chain contract identity mismatch': 'CHAIN_IDENTITY_INVALID',
+        'Non-finite or missing numeric data': 'NUMERIC_DATA_INVALID',
+    }
+    if isinstance(error, PipelineError):
+        message = str(error)
+        if message in messages:
+            return messages[message]
+        for status in range(400, 600):
+            if message == f'Upstox HTTP {status}; response withheld':
+                return f'HTTP_{status}'
+    return 'DATA_VALIDATION_FAILED'
+
+def progress(stage):
+    print(json.dumps({'stage': stage, 'trading_enabled': False}), flush=True)
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -130,6 +159,7 @@ def validate_candles(envelope):
     return len(rows)
 
 def probe(client, today):
+    progress('OPTION_CONTRACTS')
     contracts = client.contracts()
     rows = contracts['payload']['data']
     if not isinstance(rows,list):
@@ -138,14 +168,18 @@ def probe(client, today):
                      and date.fromisoformat(r['expiry'])>=today})
     if not expiries:
         raise PipelineError('No active NIFTY expiries returned')
+    progress('DAILY_CANDLES')
     daily = client.daily(today-timedelta(days=365),today-timedelta(days=1))
+    progress('INTRADAY_CANDLES')
     intraday = client.intraday()
+    progress('VALIDATE_CANDLES')
     daily_count=validate_candles(daily)
     intraday_count=validate_candles(intraday)
     if not daily_count:
         raise PipelineError('Historical daily candles are empty')
     chains=[]
     for expiry in expiries[:2]:
+        progress('OPTION_CHAIN')
         envelope=client.chain(expiry)
         chain_rows=envelope['payload']['data']
         if not isinstance(chain_rows,list) or not chain_rows:
@@ -177,7 +211,8 @@ if __name__=='__main__':
     try:
         print(json.dumps(probe(ReadOnlyClient(os.getenv('UPSTOX_ANALYTICS_TOKEN')),
                                datetime.now(ZoneInfo('Asia/Kolkata')).date())))
-    except (PipelineError, ValueError, KeyError, TypeError):
+    except (PipelineError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({'status':'BLOCKED','trading_enabled':False,
+                          'diagnostic_code':safe_failure(error),
                           'reason':'Credential, transport or data validation failed; no forecast released.'}))
         raise SystemExit(2)
