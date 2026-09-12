@@ -1,0 +1,67 @@
+name: 5DR Console Execute
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Governed EDGE Console request ID
+        required: true
+        type: string
+      console_url:
+        description: EDGE Console base URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate service credentials
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
+
+      - name: Fetch governed execution packet
+        env:
+          CONSOLE_URL: ${{ inputs.console_url }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            "$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet" \
+            --output request.json
+
+      - name: Execute governed 5DR engine
+        run: python -m src.runner --input request.json --publish > envelope.json
+
+      - name: Publish validated result to EDGE Console
+        env:
+          CONSOLE_URL: ${{ inputs.console_url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            --data-binary @envelope.json \
+            "$CONSOLE_URL/api/5dr/runs"
