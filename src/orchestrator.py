@@ -7,7 +7,13 @@ existing 5DR modules can be composed behind this stable interface.
 
 from typing import Any, Callable, Dict
 
-from .engine_contract import EngineRequest, REQUIRED_HORIZONS, validate_engine_request
+from .engine_contract import (
+    EngineRequest,
+    MODEL_VERSION,
+    OUTPUT_CONTRACT_VERSION,
+    REQUIRED_HORIZONS,
+    validate_engine_request,
+)
 from .output_contract import validate_output_contract
 
 
@@ -19,6 +25,11 @@ def execute(request: EngineRequest, domain_executor: DomainExecutor) -> Dict[str
     result = domain_executor(request)
     if not isinstance(result, dict):
         raise ValueError("5DR execution blocked: domain executor returned invalid result")
+
+    if result.get("model_version") != MODEL_VERSION:
+        raise ValueError("5DR execution blocked: invalid model version")
+    if result.get("output_contract_version") != OUTPUT_CONTRACT_VERSION:
+        raise ValueError("5DR execution blocked: invalid output contract version")
 
     validate_output_contract(
         result.get("model_version"),
