@@ -1,0 +1,30 @@
+name: 5DR CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, build/engine-orchestrator-contract]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install test dependency
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run test suite
+        run: python -m pytest -q
