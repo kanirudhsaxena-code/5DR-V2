@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       LIFECYCLE_WRITES_ENABLED: 'false'
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,12 +25,29 @@ jobs:
           python-version: '3.11'
       - name: Validate activation safety suite
         run: |
-          python -m pip install --upgrade pip pytest
+          python -m pip install --upgrade pip pytest psycopg2-binary
           python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py
-      - name: Enforce fail-closed scheduled mode
+      - name: Verify production database connection (read-only probe)
+        run: |
+          test -n "$DATABASE_URL"
+          python - <<'PY'
+          import os
+          import psycopg2
+          conn = psycopg2.connect(os.environ['DATABASE_URL'])
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT COUNT(*) FROM v_recommendation_lifecycle_v222 WHERE lifecycle_status IN ('OPEN','OPEN_T1_HIT') AND recommendation IN ('BUY_CE','BUY_PE','BUY_CONVEXITY')")
+                  open_count = cur.fetchone()[0]
+                  cur.execute("SELECT COUNT(*) FROM outcome_checkpoints WHERE status='DUE' AND due_date <= CURRENT_DATE")
+                  due_count = cur.fetchone()[0]
+              print(f'production_read_probe_ok open_actionable={open_count} due_checkpoints={due_count}')
+          finally:
+              conn.close()
+          PY
+      - name: Enforce fail-closed commissioning mode
         run: |
           test "$LIFECYCLE_WRITES_ENABLED" = "false"
-          printf '%s\n' '{"mode":"SCHEDULED_GUARD","writes_enabled":false,"evidence_handoff":"REQUIRED","database_connection":"NOT_CONFIGURED_IN_WORKFLOW","result":"NO_WRITE"}' > activation-audit.json
+          printf '%s\n' '{"mode":"COMMISSIONING_READ_PROBE","writes_enabled":false,"evidence_handoff":"REQUIRED_FOR_WRITE","database_connection":"CONFIGURED_VIA_SECRET","result":"NO_WRITE"}' > activation-audit.json
       - uses: actions/upload-artifact@v4
         with:
           name: lifecycle-production-wrapper-audit
