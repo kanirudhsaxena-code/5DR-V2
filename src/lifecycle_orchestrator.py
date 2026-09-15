@@ -22,7 +22,9 @@ def plan_recommendation(recommendation: dict, lifecycle_status: str,
     if evidence is None:
         return [ProposedAction('NO_WRITE', {'reason':'NO_VERIFIED_EVIDENCE'})]
     evidence.validate_for(instrument=recommendation['instrument'], strike=recommendation['strike'], expiry=recommendation['expiry'])
-    events = derive_events(recommendation['entry'], recommendation['stop'], recommendation['target1'], recommendation['target2'], evidence.premium, existing_types)
+    events = derive_events(entry=recommendation['entry'], stop=recommendation['stop'],
+                           target1=recommendation['target1'], target2=recommendation['target2'],
+                           mark=evidence.premium, existing_types=existing_types)
     terminal = {'T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT'}
     if any(e['event_type'] in terminal for e in events) and not path_can_close(evidence):
         return [ProposedAction('MARK', {'premium': evidence.premium, 'source_ref': evidence.source_ref,
