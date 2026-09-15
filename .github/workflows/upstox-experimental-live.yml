@@ -53,11 +53,11 @@ jobs:
             'https://api.upstox.com/v3/market-quote/ltp')"
           echo "curl_market_quote_http_status=${code}"
           test "${code}" = '200'
-      - name: Authenticated read-only sanitized live sample
+      - name: Authenticated read-only manifested live sample
         if: github.event_name != 'pull_request'
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
-        run: python -m experiments.run_upstox_live_sample
+        run: python -m experiments.run_upstox_manifested_sample
       - name: Time-separated duplicate and freshness reliability check
         if: github.event_name != 'pull_request'
         env:
