@@ -59,7 +59,7 @@ WHERE NOT EXISTS (
 
 INSERT INTO public.recommendation_events
 (forecast_id,event_type,event_timestamp,premium,pnl_pct,r_multiple,source_ref,notes)
-SELECT '5DR-20260910-1826-01','MARK','2026-09-11 09:52:00+05:30',310.25,69.9534,3.922,
+SELECT '5DR-20260910-1826-01','MARK','2026-09-11 09:52:00+05:30',310.25,69.9534,3.9232,
        'User Sensibull 22 Sep LTP screenshot at 09:52 IST',
        'Verified mark only. No T2 event is inferred because the frozen T2 value for this forecast has not been re-established.'
 WHERE NOT EXISTS (
