@@ -1,6 +1,12 @@
-"""5DR V2.1.2 assessment and efficacy calculations.
+"""5DR assessment and efficacy calculations.
 
 Pure functions only. Persistence/reconciliation is handled separately.
+
+V2.2.2 recommendation-lifecycle amendment:
+- every definitive actionable recommendation is part of the ledger from issuance;
+- UNTRIGGERED is no longer a normal current lifecycle state;
+- legacy UNTRIGGERED records are normalized as entry-verification exceptions;
+- forecast scoring rules remain unchanged.
 """
 
 from __future__ import annotations
@@ -94,24 +100,63 @@ def aggregate_all_horizons(records: list[dict]) -> dict:
     return {f"D+{day}": aggregate_forecast_horizon(grouped[day]) for day in range(1, 6)}
 
 
-def aggregate_recommendations(records: list[dict]) -> dict:
-    """Aggregate current recommendation ledger records.
+def normalize_recommendation_status(status: str | None) -> str | None:
+    """Normalize legacy lifecycle labels into the V2.2.2 contract.
 
-    Expected record keys include status, primary_outcome, final_pnl_pct,
-    current_pnl_pct and r_multiple. Missing optional values are ignored.
+    Historical snapshots are immutable, so legacy UNTRIGGERED values may still be
+    read. They are treated as entry-verification exceptions rather than a normal
+    current lifecycle state. This function does not mutate persisted records.
     """
-    total = len(records)
-    actionable = [r for r in records if r.get("recommendation") != "NO_TRADE"]
+    if status is None:
+        return None
+    value = str(status).upper()
+    if value == "UNTRIGGERED":
+        return "ENTRY_NOT_VERIFIABLE"
+    if value == "ACTIVE":
+        return "OPEN"
+    return value
+
+
+def aggregate_recommendations(records: list[dict]) -> dict:
+    """Aggregate current recommendation ledger records under V2.2.2.
+
+    Every definitive actionable call is included from issuance. Expected keys
+    include recommendation, status, primary_outcome, final_pnl_pct,
+    current_pnl_pct and r_multiple. Legacy UNTRIGGERED records are retained for
+    audit but normalized to ENTRY_NOT_VERIFIABLE for current cumulative metrics.
+    """
+    normalized = []
+    for record in records:
+        row = dict(record)
+        row["status"] = normalize_recommendation_status(row.get("status"))
+        normalized.append(row)
+
+    total = len(normalized)
+    actionable = [r for r in normalized if r.get("recommendation") != "NO_TRADE"]
     wins = [r for r in actionable if r.get("primary_outcome") == "WIN"]
     losses = [r for r in actionable if r.get("primary_outcome") == "LOSS"]
     resolved = wins + losses
     open_rows = [r for r in actionable if r.get("status") == "OPEN"]
-    untriggered = [r for r in actionable if r.get("status") == "UNTRIGGERED"]
+    entry_not_verifiable = [
+        r for r in actionable if r.get("status") == "ENTRY_NOT_VERIFIABLE"
+    ]
     not_scorable = [r for r in actionable if r.get("status") == "NOT_SCORABLE"]
 
-    realized_pnls = [float(r["final_pnl_pct"]) for r in resolved if r.get("final_pnl_pct") is not None]
-    open_pnls = [float(r["current_pnl_pct"]) for r in open_rows if r.get("current_pnl_pct") is not None]
-    rs = [float(r["r_multiple"]) for r in resolved if r.get("r_multiple") is not None]
+    realized_pnls = [
+        float(r["final_pnl_pct"])
+        for r in resolved
+        if r.get("final_pnl_pct") is not None
+    ]
+    open_pnls = [
+        float(r["current_pnl_pct"])
+        for r in open_rows
+        if r.get("current_pnl_pct") is not None
+    ]
+    rs = [
+        float(r["r_multiple"])
+        for r in resolved
+        if r.get("r_multiple") is not None
+    ]
 
     return {
         "total_recommendations": total,
@@ -120,7 +165,7 @@ def aggregate_recommendations(records: list[dict]) -> dict:
         "wins": len(wins),
         "losses": len(losses),
         "open": len(open_rows),
-        "untriggered": len(untriggered),
+        "entry_not_verifiable": len(entry_not_verifiable),
         "not_scorable": len(not_scorable),
         "hit_rate": format_rate(len(wins), len(resolved)),
         "average_r": mean(rs) if rs else None,
