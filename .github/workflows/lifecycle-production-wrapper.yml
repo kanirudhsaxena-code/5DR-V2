@@ -16,8 +16,9 @@ jobs:
   guard:
     runs-on: ubuntu-24.04
     env:
-      LIFECYCLE_WRITES_ENABLED: 'false'
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LIFECYCLE_WRITES_ENABLED: 'true'
+      EVIDENCE_PATH: runtime/evidence.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,7 +27,7 @@ jobs:
       - name: Validate activation safety suite
         run: |
           python -m pip install --upgrade pip pytest psycopg2-binary
-          python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py
+          python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py tests/test_production_cli.py
       - name: Verify production database connection (read-only probe)
         run: |
           test -n "$DATABASE_URL"
@@ -44,10 +45,35 @@ jobs:
           finally:
               conn.close()
           PY
-      - name: Enforce fail-closed commissioning mode
+      - name: Locate governed evidence handoff
+        id: evidence
+        shell: bash
         run: |
-          test "$LIFECYCLE_WRITES_ENABLED" = "false"
-          printf '%s\n' '{"mode":"COMMISSIONING_READ_PROBE","writes_enabled":false,"evidence_handoff":"REQUIRED_FOR_WRITE","database_connection":"CONFIGURED_VIA_SECRET","result":"NO_WRITE"}' > activation-audit.json
+          if [ -s "$EVIDENCE_PATH" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validate evidence handoff before any write
+        if: steps.evidence.outputs.present == 'true'
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from src.evidence_handoff import load_packets
+          packets = load_packets(Path(os.environ['EVIDENCE_PATH']))
+          if not packets:
+              raise SystemExit('Empty evidence handoff is not write-eligible')
+          print(f'validated_evidence_packets={len(packets)}')
+          PY
+      - name: Execute governed lifecycle handoff
+        if: steps.evidence.outputs.present == 'true'
+        run: |
+          python -m src.production_cli --evidence "$EVIDENCE_PATH" | tee activation-audit.json
+      - name: Fail closed when no evidence handoff exists
+        if: steps.evidence.outputs.present != 'true'
+        run: |
+          printf '%s\n' '{"mode":"NO_WRITE","writes_enabled":false,"reason":"NO_EVIDENCE_HANDOFF","database_connection":"CONFIGURED_VIA_SECRET"}' > activation-audit.json
       - uses: actions/upload-artifact@v4
         with:
           name: lifecycle-production-wrapper-audit
