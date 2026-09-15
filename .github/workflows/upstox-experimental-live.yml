@@ -6,7 +6,7 @@ on:
     branches:
       - experiment/upstox-readonly-data-service
     paths:
-      - 'experiments/**'
+      - 'experiments/*.py'
       - 'tests/test_experimental_upstox_sanitizer.py'
       - 'phase1/upstox.py'
       - '.github/workflows/upstox-experimental-live.yml'
@@ -14,7 +14,7 @@ on:
     branches:
       - main
     paths:
-      - 'experiments/**'
+      - 'experiments/*.py'
       - 'tests/test_experimental_upstox_sanitizer.py'
       - 'phase1/upstox.py'
       - '.github/workflows/upstox-experimental-live.yml'
