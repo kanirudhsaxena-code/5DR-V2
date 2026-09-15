@@ -7,7 +7,7 @@ import os
 
 from experiments.upstox_acquire import AcquisitionStageError, acquire_live_sample, github_audit_context
 from experiments.upstox_manifest import build_failure_manifest, build_success_manifest
-from phase1.upstox import safe_failure
+from experiments.upstox_safe_diagnostics import diagnostic_code
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
         print(json.dumps(output, sort_keys=True, separators=(",", ":")))
         return 0
     except AcquisitionStageError as failure:
-        code = safe_failure(failure.error)
+        code = diagnostic_code(failure.error)
         output = {
             "status": "BLOCKED",
             "read_only": True,

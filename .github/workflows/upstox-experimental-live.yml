@@ -59,12 +59,12 @@ jobs:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_manifested_sample
       - name: 5DR quantitative backbone broad live probe
-        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[quant-probe]')
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[quant-probe]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_quant_probe
       - name: Time-separated duplicate and freshness reliability check
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
           UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
