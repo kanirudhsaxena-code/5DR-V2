@@ -7,7 +7,7 @@ on:
       - experiment/upstox-readonly-data-service
     paths:
       - 'experiments/*.py'
-      - 'tests/test_experimental_upstox_sanitizer.py'
+      - 'tests/test_experimental_upstox_*.py'
       - 'phase1/upstox.py'
       - '.github/workflows/upstox-experimental-live.yml'
   pull_request:
@@ -15,7 +15,7 @@ on:
       - main
     paths:
       - 'experiments/*.py'
-      - 'tests/test_experimental_upstox_sanitizer.py'
+      - 'tests/test_experimental_upstox_*.py'
       - 'phase1/upstox.py'
       - '.github/workflows/upstox-experimental-live.yml'
 
@@ -39,8 +39,8 @@ jobs:
           python-version: '3.11'
       - name: Existing Upstox read-only safety tests
         run: python -m unittest discover -s tests -p 'test_upstox_readonly.py' -v
-      - name: Experimental sanitizer identity tests
-        run: python -m unittest discover -s tests -p 'test_experimental_upstox_sanitizer.py' -v
+      - name: Experimental reliability and boundary tests
+        run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
       - name: Curl read-only transport preflight
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
