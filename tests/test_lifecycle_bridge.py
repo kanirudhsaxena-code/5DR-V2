@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from src.evidence_bridge import EvidencePacket
 from src.lifecycle_bridge import process_evidence_packet
 
-NOW = datetime(2026, 9, 15, 10, tzinfo=timezone.utc)
+# Fixed safely-historical instant: lifecycle evidence intentionally rejects future evidence.
+NOW = datetime(2026, 9, 14, 10, tzinfo=timezone.utc)
 REC = {
     'forecast_id':'F1', 'action':'BUY_PE', 'instrument':'PE', 'strike':23500,
     'expiry':'2026-09-22', 'entry':180, 'stop':150, 'target1':250, 'target2':300,
