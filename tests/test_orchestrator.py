@@ -18,15 +18,11 @@ def _valid_result():
     return {
         "model_version": "5DR_V2_1",
         "output_contract_version": "5DR_V2_1_2",
-        "forecast_assessment": "assessment present",
-        "recommendation_assessment": "assessment present",
-        "assessment_snapshot_complete": True,
         "horizon_slots": {f"D+{i}": {} for i in range(1, 6)},
-        "recommendation_ledger_complete": True,
     }
 
 
-def test_execute_accepts_complete_contract():
+def test_execute_accepts_complete_calculation_contract():
     assert execute(_request(), lambda request: _valid_result())["model_version"] == "5DR_V2_1"
 
 
@@ -44,38 +40,26 @@ def test_execute_rejects_wrong_output_contract_version():
         execute(_request(), lambda request: result)
 
 
-def test_execute_rejects_missing_forecast_assessment():
+def test_execute_does_not_require_post_forecast_lifecycle_fields():
     result = _valid_result()
-    result["forecast_assessment"] = ""
-    with pytest.raises(ValueError):
-        execute(_request(), lambda request: result)
-
-
-def test_execute_rejects_missing_recommendation_assessment():
-    result = _valid_result()
-    result["recommendation_assessment"] = ""
-    with pytest.raises(ValueError):
-        execute(_request(), lambda request: result)
-
-
-def test_execute_rejects_incomplete_snapshot():
-    result = _valid_result()
-    result["assessment_snapshot_complete"] = False
-    with pytest.raises(ValueError):
-        execute(_request(), lambda request: result)
+    calculated = execute(_request(), lambda request: result)
+    assert "forecast_assessment" not in calculated
+    assert "recommendation_assessment" not in calculated
+    assert "assessment_snapshot_complete" not in calculated
+    assert "recommendation_ledger_complete" not in calculated
 
 
 def test_execute_rejects_missing_horizon():
     result = _valid_result()
     del result["horizon_slots"]["D+5"]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="missing horizon slots"):
         execute(_request(), lambda request: result)
 
 
-def test_execute_rejects_incomplete_recommendation_ledger():
+def test_execute_rejects_non_object_horizons():
     result = _valid_result()
-    result["recommendation_ledger_complete"] = False
-    with pytest.raises(ValueError):
+    result["horizon_slots"] = []
+    with pytest.raises(ValueError, match="horizon_slots must be an object"):
         execute(_request(), lambda request: result)
 
 
@@ -90,5 +74,5 @@ def test_execute_rejects_empty_evidence():
 
 
 def test_execute_rejects_invalid_executor_result():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid result"):
         execute(_request(), lambda request: None)

@@ -1,8 +1,8 @@
-"""Fail-closed 5DR orchestration boundary.
+"""Fail-closed 5DR calculation orchestration boundary.
 
-The orchestrator validates normalized input and production output. It will not
-fabricate missing forecasts or assessments. Domain execution is injected so
-existing 5DR modules can be composed behind this stable interface.
+The orchestrator validates normalized input and deterministic calculation output.
+It does not fabricate missing forecasts or lifecycle assessments. Production release
+validation is intentionally performed only after the release package has been built.
 """
 
 from typing import Any, Callable, Dict
@@ -14,7 +14,6 @@ from .engine_contract import (
     REQUIRED_HORIZONS,
     validate_engine_request,
 )
-from .output_contract import validate_output_contract
 
 
 DomainExecutor = Callable[[EngineRequest], Dict[str, Any]]
@@ -31,17 +30,9 @@ def execute(request: EngineRequest, domain_executor: DomainExecutor) -> Dict[str
     if result.get("output_contract_version") != OUTPUT_CONTRACT_VERSION:
         raise ValueError("5DR execution blocked: invalid output contract version")
 
-    validate_output_contract(
-        result.get("model_version"),
-        result.get("forecast_assessment"),
-        result.get("recommendation_assessment"),
-        result.get("output_contract_version"),
-        assessment_snapshot_complete=result.get("assessment_snapshot_complete", False),
-        horizon_slots=result.get("horizon_slots"),
-        recommendation_ledger_complete=result.get("recommendation_ledger_complete", False),
-    )
-
     slots = result.get("horizon_slots", {})
+    if not isinstance(slots, dict):
+        raise ValueError("5DR execution blocked: horizon_slots must be an object")
     missing = [slot for slot in REQUIRED_HORIZONS if slot not in slots]
     if missing:
         raise ValueError(f"5DR execution blocked: missing horizon slots {missing}")
