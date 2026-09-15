@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from .evidence_bridge import EvidencePacket, SourceType
+from .evidence_bridge import EvidencePacket
 
 _ALLOWED_KEYS = {
     'forecast_id','source_type','source_ref','observed_at','captured_at','instrument',
@@ -18,11 +18,9 @@ _ALLOWED_KEYS = {
 }
 
 
-def _dt(value: str | None) -> datetime | None:
-    if value is None:
-        return None
+def _dt(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
-    if parsed.tzinfo is None:
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError('evidence timestamps must be timezone-aware')
     return parsed
 
@@ -31,16 +29,18 @@ def packet_from_dict(raw: dict) -> EvidencePacket:
     unknown = set(raw) - _ALLOWED_KEYS
     if unknown:
         raise ValueError(f'unknown evidence fields: {sorted(unknown)}')
-    required = {'forecast_id','source_type','source_ref','observed_at','instrument','premium','verified','fresh','contract_matched'}
+    required = {'forecast_id','source_type','source_ref','observed_at','captured_at','instrument','premium','verified','fresh','contract_matched'}
     missing = required - set(raw)
     if missing:
         raise ValueError(f'missing evidence fields: {sorted(missing)}')
-    return EvidencePacket(
+    if raw['source_type'] not in {'SCREENSHOT','WEB_RESEARCH'}:
+        raise ValueError('source_type must be SCREENSHOT or WEB_RESEARCH')
+    packet = EvidencePacket(
         forecast_id=raw['forecast_id'],
-        source_type=SourceType(raw['source_type']),
+        source_type=raw['source_type'],
         source_ref=raw['source_ref'],
         observed_at=_dt(raw['observed_at']),
-        captured_at=_dt(raw.get('captured_at')),
+        captured_at=_dt(raw['captured_at']),
         instrument=raw['instrument'],
         strike=float(raw['strike']) if raw.get('strike') is not None else None,
         expiry=raw.get('expiry'),
@@ -51,6 +51,8 @@ def packet_from_dict(raw: dict) -> EvidencePacket:
         continuous_path=raw.get('continuous_path') is True,
         notes=raw.get('notes'),
     )
+    packet.validate()
+    return packet
 
 
 def load_packets(path: str | Path) -> list[EvidencePacket]:
