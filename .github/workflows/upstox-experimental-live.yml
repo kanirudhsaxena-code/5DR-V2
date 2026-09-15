@@ -1,0 +1,39 @@
+name: Experimental Upstox read-only live verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - 'experiments/**'
+      - 'tests/test_experimental_upstox_sanitizer.py'
+      - 'phase1/upstox.py'
+      - '.github/workflows/upstox-experimental-live.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-upstox-readonly-live
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Existing Upstox read-only safety tests
+        run: python -m unittest discover -s tests -p 'test_upstox_readonly.py' -v
+      - name: Experimental sanitizer identity tests
+        run: python -m unittest discover -s tests -p 'test_experimental_upstox_sanitizer.py' -v
+      - name: Authenticated read-only sanitized live sample
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_upstox_live_sample
