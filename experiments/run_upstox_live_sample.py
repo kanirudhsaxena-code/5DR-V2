@@ -1,20 +1,114 @@
-# Non-functional CI trigger: re-verify live read-only acquisition after Analytics Token secret rotation.
+# Experimental-only live verifier. No trading, no DB writes, no 5DR production writes.
+import base64
 import json
 import os
-from datetime import datetime
+import re
+import time
+from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, build_opener
 from zoneinfo import ZoneInfo
 
 from experiments.upstox_sanitizer import sanitize_live_envelopes
-from phase1.upstox import PipelineError, ReadOnlyClient, safe_failure
+from phase1.upstox import NoRedirect, PipelineError, ReadOnlyClient, safe_failure
+
+NIFTY = "NSE_INDEX|Nifty 50"
+SAFE_ERROR_CODE = re.compile(r"^[A-Z0-9_]{1,40}$")
+
+
+def _jwt_expired_without_exposing_claims(token):
+    """Return True/False for JWT exp only; never return token content or claims."""
+    try:
+        parts = token.strip().split(".")
+        if len(parts) != 3:
+            return None
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+        exp = payload.get("exp")
+        if not isinstance(exp, (int, float)):
+            return None
+        return float(exp) <= datetime.now(timezone.utc).timestamp()
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def _extract_error_codes(raw):
+    """Extract only provider error-code identifiers; never provider messages."""
+    try:
+        payload = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return []
+    candidates = []
+    if isinstance(payload, dict):
+        for key in ("errorCode", "error_code", "code"):
+            if key in payload:
+                candidates.append(payload[key])
+        errors = payload.get("errors")
+        if isinstance(errors, list):
+            for item in errors:
+                if isinstance(item, dict):
+                    for key in ("errorCode", "error_code", "code"):
+                        if key in item:
+                            candidates.append(item[key])
+    result = []
+    for value in candidates:
+        text = str(value)
+        if SAFE_ERROR_CODE.fullmatch(text) and text not in result:
+            result.append(text)
+    return result[:4]
+
+
+def _safe_auth_probe(token, path, params):
+    """GET-only diagnostic returning status/error codes but never body or credentials."""
+    url = "https://api.upstox.com" + path + "?" + urlencode(params)
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token.strip(),
+        },
+        method="GET",
+    )
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=20) as response:
+            response.read(1)  # prove an authenticated response without logging market payload
+            return {"http_status": int(response.status), "error_codes": []}
+    except HTTPError as error:
+        raw = error.read(65536)
+        return {"http_status": int(error.code), "error_codes": _extract_error_codes(raw)}
+    except (URLError, TimeoutError, OSError):
+        return {"http_status": None, "error_codes": ["NETWORK_FAILED"]}
+
+
+def _auth_diagnostics(token):
+    """Distinguish credential-wide rejection from one endpoint-specific rejection."""
+    result = {
+        "jwt_expired_by_exp_claim": _jwt_expired_without_exposing_claims(token),
+        "market_quote_ltp_v3": _safe_auth_probe(
+            token,
+            "/v3/market-quote/ltp",
+            {"instrument_key": NIFTY},
+        ),
+    }
+    time.sleep(1)
+    result["option_contracts_v2"] = _safe_auth_probe(
+        token,
+        "/v2/option/contract",
+        {"instrument_key": NIFTY},
+    )
+    return result
 
 
 def main():
     stage = "INIT"
+    token = os.getenv("UPSTOX_ANALYTICS_TOKEN")
     try:
-        client = ReadOnlyClient(os.getenv("UPSTOX_ANALYTICS_TOKEN"))
+        client = ReadOnlyClient(token)
         stage = "OPTION_CONTRACTS"
         contracts = client.contracts()
-        expiries = sorted({row["expiry"] for row in contracts["payload"]["data"] if row.get("underlying_key") == "NSE_INDEX|Nifty 50"})
+        expiries = sorted({row["expiry"] for row in contracts["payload"]["data"] if row.get("underlying_key") == NIFTY})
         today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
         expiry = next(value for value in expiries if datetime.fromisoformat(value).date() >= today)
         stage = "INTRADAY_CANDLES"
@@ -27,15 +121,19 @@ def main():
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
     except (PipelineError, ValueError, KeyError, TypeError, StopIteration) as error:
-        print(json.dumps({
+        code = safe_failure(error)
+        output = {
             "status": "BLOCKED",
             "stage": stage,
-            "diagnostic_code": safe_failure(error),
+            "diagnostic_code": code,
             "read_only": True,
             "trading_enabled": False,
             "production_5dr_write_enabled": False,
             "reason": "Authenticated acquisition or strict validation failed; provider payload, arbitrary exception text, and credentials withheld.",
-        }, sort_keys=True))
+        }
+        if code == "AUTH_REJECTED" and token and token.strip():
+            output["safe_auth_diagnostics"] = _auth_diagnostics(token)
+        print(json.dumps(output, sort_keys=True))
         return 2
 
 
