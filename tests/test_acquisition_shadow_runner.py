@@ -1,7 +1,11 @@
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
+from unittest.mock import patch
 
 from src.acquisition_shadow_runner import run_shadow
+
+
+NOW = datetime(2026, 9, 15, 10, 30, 30, tzinfo=timezone.utc)
 
 
 class FakeClient:
@@ -17,7 +21,13 @@ class FakeClient:
 
 class ShadowRunnerTests(unittest.TestCase):
     def test_missing_event_registry_keeps_shadow_blocked(self):
-        result = run_shadow("5drreq_shadow", FakeClient(), date(2026, 9, 15))
+        # Freshness is independently covered by acquisition boundary tests.
+        # Freeze the envelope clock here so this fixture cannot become stale
+        # merely because CI executes later than the captured sample timestamp.
+        with patch("src.acquisition_shadow_runner.build_evidence_envelope") as build:
+            from src.autonomous_acquisition import build_evidence_envelope as real_build
+            build.side_effect = lambda request_id, observations: real_build(request_id, observations, now=NOW)
+            result = run_shadow("5drreq_shadow", FakeClient(), date(2026, 9, 15))
         self.assertEqual(result["status"], "AUTONOMOUS_EVIDENCE_BLOCKED")
         self.assertIn("EVENT_SHOCK", result["blockers"]["missing"])
         self.assertFalse(result["forecast_release_enabled"])
