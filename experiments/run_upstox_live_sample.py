@@ -11,6 +11,7 @@ from urllib.request import Request, build_opener
 from zoneinfo import ZoneInfo
 
 from experiments.upstox_sanitizer import sanitize_live_envelopes
+from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
 from experiments.upstox_transport import CurlOpener
 from phase1.upstox import NoRedirect, PipelineError, ReadOnlyClient, safe_failure
 
@@ -110,13 +111,27 @@ def main():
         contracts = client.contracts()
         expiries = sorted({row["expiry"] for row in contracts["payload"]["data"] if row.get("underlying_key") == NIFTY})
         today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
-        expiry = next(value for value in expiries if datetime.fromisoformat(value).date() >= today)
+
+        stage = "MARKET_STATUS"
+        market_session = get_nfo_market_status(token)
+        expiry = select_session_valid_expiry(expiries, today, market_session["status"])
+
         stage = "INTRADAY_CANDLES"
         intraday = client.intraday()
         stage = "OPTION_CHAIN"
         chain = client.chain(expiry)
         stage = "SANITIZE"
-        result = sanitize_live_envelopes(contracts, intraday, chain, today)
+        result = sanitize_live_envelopes(contracts, intraday, chain, today, selected_expiry=expiry)
+        result["market_session"] = {
+            "exchange": market_session["exchange"],
+            "status": market_session["status"],
+            "last_updated": market_session["last_updated"],
+        }
+        result["provenance"]["market_status"] = {
+            "source_path": market_session["source_path"],
+            "sha256": market_session["sha256"],
+            "received_at": market_session["received_at"],
+        }
         result["transport"] = "curl"
         result["status"] = "LIVE_SAMPLE_PASSED"
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
