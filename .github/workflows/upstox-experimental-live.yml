@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: experimental-upstox-readonly-live-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
