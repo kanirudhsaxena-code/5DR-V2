@@ -1,0 +1,37 @@
+name: 5DR Lifecycle Production Wrapper
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 4-10 * * 1-5'
+
+concurrency:
+  group: five-dr-lifecycle-production-v222
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    env:
+      LIFECYCLE_WRITES_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate activation safety suite
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py
+      - name: Enforce fail-closed scheduled mode
+        run: |
+          test "$LIFECYCLE_WRITES_ENABLED" = "false"
+          printf '%s\n' '{"mode":"SCHEDULED_GUARD","writes_enabled":false,"evidence_handoff":"REQUIRED","database_connection":"NOT_CONFIGURED_IN_WORKFLOW","result":"NO_WRITE"}' > activation-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-production-wrapper-audit
+          path: activation-audit.json
+          retention-days: 30
