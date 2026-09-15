@@ -10,12 +10,20 @@ on:
       - 'tests/test_experimental_upstox_sanitizer.py'
       - 'phase1/upstox.py'
       - '.github/workflows/upstox-experimental-live.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/**'
+      - 'tests/test_experimental_upstox_sanitizer.py'
+      - 'phase1/upstox.py'
+      - '.github/workflows/upstox-experimental-live.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: experimental-upstox-readonly-live
+  group: experimental-upstox-readonly-live-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
