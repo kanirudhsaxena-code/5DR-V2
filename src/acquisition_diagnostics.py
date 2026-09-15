@@ -1,0 +1,21 @@
+"""Bounded diagnostic codes for autonomous acquisition failures."""
+
+ALLOWED_DIAGNOSTICS = {
+    "TOKEN_MISSING",
+    "AUTH_REJECTED",
+    "NETWORK_FAILED",
+    "INVALID_JSON",
+    "RESPONSE_SCHEMA_INVALID",
+    "NO_ACTIVE_EXPIRIES",
+    "STALE_EVIDENCE",
+    "SOURCE_REF_REQUIRED",
+    "CROSS_MARKET_PROVENANCE_MISSING",
+    "EXECUTION_INPUT_PROVENANCE_MISSING",
+    "EVENT_SOURCES_UNAVAILABLE",
+    "EVIDENCE_CONFLICT",
+    "ACQUISITION_GOVERNANCE_BLOCKED",
+}
+
+
+def bounded_diagnostic(code: str) -> str:
+    return code if code in ALLOWED_DIAGNOSTICS else "ACQUISITION_GOVERNANCE_BLOCKED"
