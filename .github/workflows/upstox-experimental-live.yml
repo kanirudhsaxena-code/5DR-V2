@@ -41,6 +41,17 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_upstox_readonly.py' -v
       - name: Experimental sanitizer identity tests
         run: python -m unittest discover -s tests -p 'test_experimental_upstox_sanitizer.py' -v
+      - name: Curl read-only transport preflight
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: |
+          code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --get \
+            --data-urlencode 'instrument_key=NSE_INDEX|Nifty 50' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${UPSTOX_ANALYTICS_TOKEN}" \
+            'https://api.upstox.com/v3/market-quote/ltp')"
+          echo "curl_market_quote_http_status=${code}"
+          test "${code}" = '200'
       - name: Authenticated read-only sanitized live sample
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
