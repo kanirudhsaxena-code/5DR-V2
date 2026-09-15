@@ -1,8 +1,10 @@
 # Experimental-only live verifier. No trading, no DB writes, no 5DR production writes.
 import base64
+import io
 import json
 import os
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
@@ -15,6 +17,75 @@ from phase1.upstox import NoRedirect, PipelineError, ReadOnlyClient, safe_failur
 
 NIFTY = "NSE_INDEX|Nifty 50"
 SAFE_ERROR_CODE = re.compile(r"^[A-Z0-9_]{1,40}$")
+_CURL_STATUS_MARKER = b"\n__5DR_HTTP_STATUS__="
+
+
+class _CurlResponse:
+    def __init__(self, body, status):
+        self._body = body
+        self.status = status
+
+    def read(self, size=-1):
+        return self._body if size is None or size < 0 else self._body[:size]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class CurlOpener:
+    """curl transport adapter for the existing GET-only ReadOnlyClient.
+
+    The Authorization header is passed on stdin, never on the process command line.
+    Redirects are not followed. The existing ReadOnlyClient still owns endpoint
+    allowlisting, schema validation, retries, digests and envelope construction.
+    """
+
+    def open(self, request, timeout=20):
+        if request.get_method() != "GET":
+            raise URLError("non-GET transport request refused")
+        header_text = "".join(f"{name}: {value}\n" for name, value in request.header_items()) + "\n"
+        command = [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            str(int(timeout)),
+            "--max-filesize",
+            "8000001",
+            "--request",
+            "GET",
+            "--header",
+            "@-",
+            "--write-out",
+            "\\n__5DR_HTTP_STATUS__=%{http_code}",
+            request.full_url,
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                input=header_text.encode("utf-8"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=timeout + 5,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise URLError("curl transport failed") from error
+        if result.returncode != 0:
+            raise URLError("curl transport failed")
+        if _CURL_STATUS_MARKER not in result.stdout:
+            raise URLError("curl status marker missing")
+        body, status_raw = result.stdout.rsplit(_CURL_STATUS_MARKER, 1)
+        try:
+            status = int(status_raw.strip())
+        except ValueError as error:
+            raise URLError("curl status invalid") from error
+        if status >= 400:
+            raise HTTPError(request.full_url, status, "HTTP error", None, io.BytesIO(body))
+        return _CurlResponse(body, status)
 
 
 def _jwt_expired_without_exposing_claims(token):
@@ -60,7 +131,7 @@ def _extract_error_codes(raw):
 
 
 def _safe_auth_probe(token, path, params):
-    """GET-only diagnostic returning status/error codes but never body or credentials."""
+    """urllib diagnostic kept only to distinguish Cloudflare transport rejection."""
     url = "https://api.upstox.com" + path + "?" + urlencode(params)
     request = Request(
         url,
@@ -73,7 +144,7 @@ def _safe_auth_probe(token, path, params):
     )
     try:
         with build_opener(NoRedirect()).open(request, timeout=20) as response:
-            response.read(1)  # prove an authenticated response without logging market payload
+            response.read(1)
             return {"http_status": int(response.status), "error_codes": []}
     except HTTPError as error:
         raw = error.read(65536)
@@ -83,17 +154,16 @@ def _safe_auth_probe(token, path, params):
 
 
 def _auth_diagnostics(token):
-    """Distinguish credential-wide rejection from one endpoint-specific rejection."""
     result = {
         "jwt_expired_by_exp_claim": _jwt_expired_without_exposing_claims(token),
-        "market_quote_ltp_v3": _safe_auth_probe(
+        "urllib_market_quote_ltp_v3": _safe_auth_probe(
             token,
             "/v3/market-quote/ltp",
             {"instrument_key": NIFTY},
         ),
     }
     time.sleep(1)
-    result["option_contracts_v2"] = _safe_auth_probe(
+    result["urllib_option_contracts_v2"] = _safe_auth_probe(
         token,
         "/v2/option/contract",
         {"instrument_key": NIFTY},
@@ -105,7 +175,7 @@ def main():
     stage = "INIT"
     token = os.getenv("UPSTOX_ANALYTICS_TOKEN")
     try:
-        client = ReadOnlyClient(token)
+        client = ReadOnlyClient(token, opener=CurlOpener())
         stage = "OPTION_CONTRACTS"
         contracts = client.contracts()
         expiries = sorted({row["expiry"] for row in contracts["payload"]["data"] if row.get("underlying_key") == NIFTY})
@@ -117,6 +187,7 @@ def main():
         chain = client.chain(expiry)
         stage = "SANITIZE"
         result = sanitize_live_envelopes(contracts, intraday, chain, today)
+        result["transport"] = "curl"
         result["status"] = "LIVE_SAMPLE_PASSED"
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
