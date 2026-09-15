@@ -9,8 +9,6 @@ import argparse
 import json
 import os
 
-import psycopg2
-
 from .lifecycle_db_adapter import LifecycleDbAdapter
 from .production_activation import activate
 
@@ -27,6 +25,10 @@ def main() -> int:
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
         raise SystemExit('DATABASE_URL is required')
+
+    # The production driver is an execution dependency, not a dependency of the
+    # deterministic framework/test modules. The Actions production wrapper installs it.
+    import psycopg2
 
     writes_enabled = _enabled(os.environ.get('LIFECYCLE_WRITES_ENABLED'))
     db = LifecycleDbAdapter(lambda: psycopg2.connect(database_url))
