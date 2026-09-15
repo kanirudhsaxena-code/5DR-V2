@@ -27,7 +27,7 @@ def _number(value, field):
     return int(result) if result == result.to_integral() else float(result)
 
 
-def sanitize_live_envelopes(contracts, intraday, chain, today: date):
+def sanitize_live_envelopes(contracts, intraday, chain, today: date, selected_expiry=None):
     rows = contracts["payload"]["data"]
     if not isinstance(rows, list) or not rows:
         raise PipelineError("Contract array missing")
@@ -47,7 +47,14 @@ def sanitize_live_envelopes(contracts, intraday, chain, today: date):
             by_key[key] = row
     if not expiries:
         raise PipelineError("No active NIFTY expiries returned")
-    selected_expiry = sorted(expiries)[0]
+    if selected_expiry is None:
+        selected_expiry = sorted(expiries)[0]
+    else:
+        if not isinstance(selected_expiry, str):
+            raise PipelineError("Selected expiry invalid")
+        date.fromisoformat(selected_expiry)
+        if selected_expiry not in expiries:
+            raise PipelineError("Selected expiry not in contract master")
 
     validate_candles(intraday)
     candle_rows = intraday["payload"]["data"]["candles"]
