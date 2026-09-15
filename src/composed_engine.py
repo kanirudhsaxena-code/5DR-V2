@@ -1,7 +1,11 @@
 """Deterministic composition of existing 5DR domain primitives.
 
-Consumes already-normalized evidence. It does not inspect screenshots and does not
-invent missing inputs. Missing required evidence fails closed.
+Consumes already-normalized market evidence. It does not inspect screenshots and does
+not invent missing inputs. Missing required execution evidence fails closed.
+
+Lifecycle outputs (forecast/recommendation assessment and ledger completion) are
+created after a forecast exists and therefore are intentionally not upstream engine
+inputs.
 """
 
 from typing import Any, Dict
@@ -28,8 +32,7 @@ def domain_execute(request: EngineRequest) -> Dict[str, Any]:
     required = {
         "regime", "component_scores", "market_trust_inputs", "event_shock",
         "execution_inputs", "data_adequate", "event_kill_switch", "expected_rr",
-        "forecast_assessment", "recommendation_assessment", "horizon_slots",
-        "recommendation_ledger_complete", "assessment_snapshot_complete",
+        "horizon_slots",
     }
     missing = sorted(required - set(data))
     if missing:
@@ -51,11 +54,7 @@ def domain_execute(request: EngineRequest) -> Dict[str, Any]:
     return {
         "model_version": MODEL_VERSION,
         "output_contract_version": OUTPUT_CONTRACT_VERSION,
-        "forecast_assessment": data["forecast_assessment"],
-        "recommendation_assessment": data["recommendation_assessment"],
-        "assessment_snapshot_complete": bool(data["assessment_snapshot_complete"]),
         "horizon_slots": data["horizon_slots"],
-        "recommendation_ledger_complete": bool(data["recommendation_ledger_complete"]),
         "des5": directional_score,
         "directional_label": directional_label(directional_score),
         "market_trust": trust_score,
