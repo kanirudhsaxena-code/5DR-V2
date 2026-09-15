@@ -4,36 +4,56 @@ Canonical 5DR V2.2.2 remains untouched. This branch must not be merged without e
 
 ## Gate status
 
-- BUILT: PASS — isolated read-only live sample runner, exact CE/PE contract sanitizer, hardened curl-backed transport adapter, and NFO session-state guard exist.
-- TESTED: PASS — 21 tests pass in GitHub Actions: 7 existing Upstox read-only safety tests plus 14 experimental identity, session-state, fail-closed and transport-boundary tests.
-- LIVE VERIFIED: PASS — full authenticated retrieval has passed repeatedly. Run `35002686745` first proved the sanitized live path; run `35003039325` re-proved it after transport hardening; run `35003280216` proved the NFO session-aware expiry rollover live. All returned `LIVE_SAMPLE_PASSED`.
-- RELIABILITY VERIFIED: IN PROGRESS — transport boundaries, deterministic repeatability, market-session validation and expiry rollover are proven. Duplicate-run handling, formal freshness gates for open/closed sessions and broader time-separated live checks remain before this gate can pass.
-- READY FOR 5DR INTEGRATION: NO — integration requires reliability proof plus explicit user approval.
+- BUILT: PASS — isolated read-only acquisition, curl transport, exact CE/PE sanitizer, NFO session guard, formal freshness validator, deterministic snapshot fingerprint and duplicate policy exist.
+- TESTED: PASS — 32 tests pass in GitHub Actions: 7 original Upstox read-only safety tests plus 25 experimental identity, session, transport, freshness, fingerprint and duplicate-policy tests.
+- LIVE VERIFIED: PASS — authenticated NIFTY spot, intraday candle, expiry list, exact CE/PE contracts, LTP, OI, volume, timestamps and SHA-256 provenance have passed repeatedly.
+- RELIABILITY VERIFIED: IN PROGRESS — closed-session freshness and duplicate behavior are now live-proven. An open-market time-separated pair is still required before this gate can pass.
+- READY FOR 5DR INTEGRATION: NO — reliability must pass and the user must explicitly approve integration.
 
 ## Transport finding
 
-The current Upstox Analytics Token is valid: curl market-quote preflights return HTTP 200. Python `urllib` requests from the same runner returned HTTP 403 / provider error code 1010, consistent with an upstream browser-signature/WAF transport rejection rather than token expiry. The experimental runner therefore uses curl only as the HTTP transport while retaining the existing `ReadOnlyClient` endpoint allowlist, NIFTY restriction, GET-only behavior, retry controls, response validation and envelope hashing.
+The current Upstox Analytics Token is valid: curl market-quote preflights return HTTP 200. Python `urllib` requests from the same runner returned HTTP 403 / provider error code 1010, consistent with an upstream browser-signature/WAF transport rejection rather than token expiry. The experiment therefore uses curl only as the HTTP transport while retaining the existing `ReadOnlyClient` endpoint allowlist, NIFTY restriction, GET-only behavior, retry controls, schema validation and envelope hashing.
 
 The curl adapter is isolated in `experiments/upstox_transport.py`. Boundary tests verify GET-only behavior, no redirect following, secret absence from process arguments, fail-closed handling for non-2xx/missing status/oversize/timeout conditions, and preservation of HTTP errors for the existing client.
 
 ## Session-state finding and fix
 
-A post-close live sample on 15 September initially saw the same-day 15 September expiry still present in the contract master. That was valid raw provider data but not a valid next tradable expiry after the session had closed. The experiment now reads the official NFO exchange-status endpoint and selects expiries according to session state. Live run `35003280216` returned NFO `NORMAL_CLOSE` and correctly rolled the selected chain from 15 September to 22 September. Market-status provenance is hashed and timestamped alongside the other sources.
+A post-close sample on 15 September initially saw the same-day expiry still present in the contract master. The experiment now reads the official NFO exchange-status endpoint and selects expiries according to session state. Live run `35003280216` returned NFO `NORMAL_CLOSE` and correctly rolled the selected chain from 15 September to 22 September. Market-status provenance is hashed and timestamped alongside the other sources.
 
-## Security boundary observed
+## Freshness, fingerprint and duplicate proof
 
-GitHub Actions workflow permissions are `contents: read`. Checkout credentials are not persisted. No database credential or lifecycle writer is used. No order/trading endpoint is allowlisted. The Analytics Token is supplied only through the repository secret and is never emitted. The curl adapter passes authorization headers through stdin rather than process arguments. No Upstox payload is classified as SCREENSHOT or WEB_RESEARCH.
+Run `35003874222` / commit `18124ed6cc5e920f2549fcb10f7ee2af3d6d7687` passed all controls.
+
+- 7 original safety tests: PASS.
+- 25 experimental reliability/boundary tests: PASS.
+- Curl authenticated market-quote preflight: HTTP 200.
+- Single live sample: `LIVE_SAMPLE_PASSED`.
+- NFO session: `NORMAL_CLOSE`.
+- Freshness mode: `CLOSED_SESSION_FINAL` / `FRESHNESS_PASS`.
+- Selected expiry: 22 September 2026.
+- NIFTY spot: 23118.6.
+- Snapshot fingerprint: `6569860a78f912f28c0386e59ed477de70c2866235524e0abe53d3cb981522ee`.
+- Time-separated pair interval: 80.209 seconds.
+- Pair result: `RELIABILITY_PAIR_PASSED`.
+- Duplicate result: true, classified `EXPECTED_STATIC_NONTRADING_SESSION` because the exchange was closed.
+- Production 5DR writes: false.
+- Trading enabled: false.
+
+The duplicate policy is intentionally session-aware: an unchanged snapshot after >=65 seconds during `NORMAL_OPEN` or a closing phase fails closed; an identical snapshot after `NORMAL_CLOSE` is accepted as an expected static market state and is fingerprinted as a duplicate rather than treated as a new observation.
+
+## Auditability and security boundary
+
+Each live snapshot now carries a schema version, deterministic SHA-256 snapshot fingerprint, GitHub run/attempt/commit context, source-level receipt timestamps and source SHA-256 digests. GitHub Actions permissions remain `contents: read`; checkout credentials are not persisted. No database credential, lifecycle writer or order/trading endpoint is present. The Analytics Token is supplied only through the repository secret and is never emitted. No Upstox payload is classified as SCREENSHOT or WEB_RESEARCH.
+
+Authenticated live steps are skipped on pull-request events so the same branch commit does not make duplicate provider calls through both push and PR workflows.
 
 ## Live-proof references
 
-- Run `35002686745` / commit `e325e7149dfd4f8c314bf32889f1b886f551317d`: PASS — first end-to-end live sanitized sample.
-- Run `35003039325` / commit `279c8af11bd6df4fd352039b4e80ab1ed7f379b8`: PASS — hardened transport tests, HTTP 200 preflight, and end-to-end live sanitized sample.
-- Run `35003280216` / commit `98ff7985b88515f1842a09cdc0a8209bb9e7ced6`: PASS — NFO status `NORMAL_CLOSE`, same-day expiry rejected after close, 22 September chain selected and exact contracts validated.
-- Transport: curl
-- Read-only: true
-- Trading enabled: false
-- Production 5DR writes: false
+- `35002686745`: first end-to-end authenticated sanitized sample — PASS.
+- `35003039325`: hardened curl transport and repeated live sample — PASS.
+- `35003280216`: NFO status-aware expiry rollover — PASS.
+- `35003874222`: formal freshness, audit fingerprint and 80-second closed-session duplicate pair — PASS.
 
-## Next gate
+## Remaining reliability gate
 
-Reliability hardening and time-separated validation remain confined to this experimental branch. Do not merge or connect this source to canonical 5DR until the reliability gate passes and the user explicitly approves integration.
+Run the same 75-second pair while NFO is `NORMAL_OPEN`. Both samples must pass `LIVE_OPEN` freshness; after >=65 seconds the second snapshot must advance and must not be accepted as a duplicate. A second open-session check later in the trading day is desirable for broader stability evidence. Until those live checks pass, do not merge this PR and do not connect Upstox to canonical 5DR.
