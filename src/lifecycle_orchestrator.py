@@ -17,7 +17,7 @@ class ProposedAction:
 
 def plan_recommendation(recommendation: dict, lifecycle_status: str,
                         evidence: OptionEvidence | None, existing_types: set[str]) -> list[ProposedAction]:
-    if not should_process(recommendation, lifecycle_status):
+    if not should_process(recommendation['action'], lifecycle_status):
         return []
     if evidence is None:
         return [ProposedAction('NO_WRITE', {'reason':'NO_VERIFIED_EVIDENCE'})]
