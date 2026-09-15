@@ -1,3 +1,4 @@
+# Non-functional CI trigger: re-verify live read-only acquisition after Analytics Token secret rotation.
 import json
 import os
 from datetime import datetime
