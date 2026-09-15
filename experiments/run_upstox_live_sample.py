@@ -8,12 +8,9 @@ from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener
-from zoneinfo import ZoneInfo
 
-from experiments.upstox_sanitizer import sanitize_live_envelopes
-from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
-from experiments.upstox_transport import CurlOpener
-from phase1.upstox import NoRedirect, PipelineError, ReadOnlyClient, safe_failure
+from experiments.upstox_acquire import AcquisitionStageError, acquire_live_sample
+from phase1.upstox import NoRedirect, safe_failure
 
 NIFTY = "NSE_INDEX|Nifty 50"
 SAFE_ERROR_CODE = re.compile(r"^[A-Z0-9_]{1,40}$")
@@ -103,44 +100,16 @@ def _auth_diagnostics(token):
 
 
 def main():
-    stage = "INIT"
     token = os.getenv("UPSTOX_ANALYTICS_TOKEN")
     try:
-        client = ReadOnlyClient(token, opener=CurlOpener())
-        stage = "OPTION_CONTRACTS"
-        contracts = client.contracts()
-        expiries = sorted({row["expiry"] for row in contracts["payload"]["data"] if row.get("underlying_key") == NIFTY})
-        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
-
-        stage = "MARKET_STATUS"
-        market_session = get_nfo_market_status(token)
-        expiry = select_session_valid_expiry(expiries, today, market_session["status"])
-
-        stage = "INTRADAY_CANDLES"
-        intraday = client.intraday()
-        stage = "OPTION_CHAIN"
-        chain = client.chain(expiry)
-        stage = "SANITIZE"
-        result = sanitize_live_envelopes(contracts, intraday, chain, today, selected_expiry=expiry)
-        result["market_session"] = {
-            "exchange": market_session["exchange"],
-            "status": market_session["status"],
-            "last_updated": market_session["last_updated"],
-        }
-        result["provenance"]["market_status"] = {
-            "source_path": market_session["source_path"],
-            "sha256": market_session["sha256"],
-            "received_at": market_session["received_at"],
-        }
-        result["transport"] = "curl"
-        result["status"] = "LIVE_SAMPLE_PASSED"
+        result = acquire_live_sample(token)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    except (PipelineError, ValueError, KeyError, TypeError, StopIteration) as error:
-        code = safe_failure(error)
+    except AcquisitionStageError as failure:
+        code = safe_failure(failure.error)
         output = {
             "status": "BLOCKED",
-            "stage": stage,
+            "stage": failure.stage,
             "diagnostic_code": code,
             "read_only": True,
             "trading_enabled": False,
