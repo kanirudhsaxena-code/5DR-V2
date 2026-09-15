@@ -5,15 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .autonomous_acquisition import SourceObservation, build_evidence_envelope
-from .autonomous_evidence_bridge import bridge_to_canonical_evidence
-from .evidence_handoff import load_packets
+from .autonomous_evidence_gate import AutonomousEvidenceGateBlocked, release_normalized_evidence
 from .production_activation import ActivationResult, activate
 
 
 @dataclass(frozen=True)
 class ShadowResult:
     acquisition_status: str
-    bridge_status: str
+    gate_status: str
     activation: ActivationResult | None
     reason: str | None = None
 
@@ -24,14 +23,10 @@ def run_shadow(db, evidence_path: str | Path, observations: list[SourceObservati
     if envelope['status'] != 'AUTONOMOUS_EVIDENCE_READY':
         return ShadowResult(envelope['status'], 'BLOCKED', None, 'ACQUISITION_NOT_READY')
 
-    packets = load_packets(evidence_path)
-    if not packets:
-        return ShadowResult(envelope['status'], 'BLOCKED', None, 'NO_CANONICAL_PACKET')
-
-    for packet in packets:
-        bridged = bridge_to_canonical_evidence(envelope, packet)
-        if bridged['status'] != 'CANONICAL_EVIDENCE_READY':
-            return ShadowResult(envelope['status'], bridged['status'], None, bridged.get('reason'))
+    try:
+        release_normalized_evidence(envelope, evidence_path)
+    except AutonomousEvidenceGateBlocked as exc:
+        return ShadowResult(envelope['status'], 'BLOCKED', None, str(exc))
 
     activation = activate(db, evidence_path, writes_enabled=False)
     if activation.writes_enabled or activation.mode != 'DRY_RUN':
