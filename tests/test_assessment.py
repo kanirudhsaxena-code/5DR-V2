@@ -3,6 +3,7 @@ from src.assessment import (
     aggregate_forecast_horizon,
     aggregate_recommendations,
     evaluate_forecast_checkpoint,
+    normalize_recommendation_status,
 )
 
 
@@ -75,3 +76,18 @@ def test_recommendation_hit_rate_and_pnl():
     assert result["hit_rate"] == "1/2 = 50.0%"
     assert result["realized_standardized_model_pnl_pct"] == 20
     assert result["open_standardized_mtm_pct"] == 10
+    assert "untriggered" not in result
+
+
+def test_legacy_untriggered_normalizes_to_entry_not_verifiable():
+    assert normalize_recommendation_status("UNTRIGGERED") == "ENTRY_NOT_VERIFIABLE"
+    result = aggregate_recommendations([
+        {"recommendation": "BUY_PE", "status": "UNTRIGGERED", "primary_outcome": None},
+        {"recommendation": "BUY_PE", "status": "ACTIVE", "primary_outcome": None,
+         "current_pnl_pct": 5},
+    ])
+    assert result["actionable_calls"] == 2
+    assert result["entry_not_verifiable"] == 1
+    assert result["open"] == 1
+    assert result["hit_rate"] == "0/0 = N/A"
+    assert "untriggered" not in result
