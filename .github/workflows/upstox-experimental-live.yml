@@ -29,7 +29,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -42,6 +42,7 @@ jobs:
       - name: Experimental reliability and boundary tests
         run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
       - name: Curl read-only transport preflight
+        if: github.event_name != 'pull_request'
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: |
@@ -53,6 +54,13 @@ jobs:
           echo "curl_market_quote_http_status=${code}"
           test "${code}" = '200'
       - name: Authenticated read-only sanitized live sample
+        if: github.event_name != 'pull_request'
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_live_sample
+      - name: Time-separated duplicate and freshness reliability check
+        if: github.event_name != 'pull_request'
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+          UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
+        run: python -m experiments.run_upstox_reliability_pair
