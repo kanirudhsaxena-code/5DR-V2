@@ -1,0 +1,39 @@
+{
+  "mode": "SHADOW_NON_PUBLISHING",
+  "writes_enabled": false,
+  "research_date": "2026-09-15",
+  "purpose": "Fresh real-world research evidence for operational shadow validation; not a lifecycle price-path packet and not eligible for production persistence.",
+  "observations": [
+    {
+      "category": "MARKET_TRUST",
+      "source_name": "Reuters",
+      "source_ref": "https://www.reuters.com/world/india/indian-shares-seen-opening-higher-hdfc-bank-focus-2026-09-15/",
+      "authority": "REPUTABLE_SECONDARY",
+      "fact": "Nifty 50 closed 1.19% lower at 23,118.60, its lowest close in five months; elevated oil prices and global bond yields were major risk drivers.",
+      "verified": true
+    },
+    {
+      "category": "EVENT_SHOCK",
+      "source_name": "Reuters",
+      "source_ref": "https://www.reuters.com/world/india/rupee-drops-with-stocks-bonds-oil-inflation-fed-worries-mount-2026-09-15/",
+      "authority": "REPUTABLE_SECONDARY",
+      "fact": "Rupee, equities and bonds weakened as elevated oil, inflation concerns and expected Federal Reserve tightening increased India macro risk.",
+      "verified": true
+    },
+    {
+      "category": "EXECUTION_RISK",
+      "source_name": "Reuters",
+      "source_ref": "https://www.reuters.com/world/india/indias-proposals-revamp-derivatives-settlement-could-alleviate-expiry-day-2026-09-15/",
+      "authority": "REPUTABLE_SECONDARY",
+      "fact": "SEBI proposed derivatives settlement changes after closing-auction implementation produced sharp expiry-day price swings; this is treated as execution-risk context, not directional evidence.",
+      "verified": true
+    }
+  ],
+  "release": {
+    "canonical_option_packet_created": false,
+    "lifecycle_activation_attempted": false,
+    "neon_write_attempted": false,
+    "status": "BLOCKED_PENDING_FRESH_CONTRACT_MATCHED_OPTION_EVIDENCE",
+    "reason": "Fresh web research proves current market/event/execution context but does not prove a current option premium, strike/expiry contract match, or continuous price path. Fail closed rather than relabel web research as option lifecycle evidence."
+  }
+}
