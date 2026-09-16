@@ -1,9 +1,10 @@
 """Live governed web-context acquisition for screenshot-free 5DR shadow runs.
 
 This executor fetches a small allowlisted set of public HTTPS sources, extracts a
-bounded visible-text excerpt, fingerprints the exact response body, and emits the
-existing V2.2.3 web-context contract. It does not score, forecast, trade, persist
-production state, or infer that a failed source means 'no event'.
+bounded visible-text excerpt plus narrowly governed machine facts where available,
+fingerprints the exact response body, and emits the existing V2.2.3 web-context
+contract. A reachable page without an approved extractable fact is explicitly marked
+REFERENCE_ONLY; it is never treated as a neutral market signal.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 from experiments.data_contract import DataArchitectureError
+from experiments.live_macro_facts import extract_role_facts, fact_summary_prefix
 from experiments.upstox_transport import CurlOpener
 from experiments.web_context import build_web_context_item, prepare_web_context
 
@@ -112,7 +114,7 @@ class _VisibleText(HTMLParser):
         return re.sub(r"\s+", " ", " ".join(self._parts)).strip()
 
 
-def _excerpt(body: bytes, role: WebRole) -> str:
+def _visible_text(body: bytes) -> str:
     parser = _VisibleText()
     try:
         parser.feed(body.decode("utf-8", errors="ignore"))
@@ -121,6 +123,10 @@ def _excerpt(body: bytes, role: WebRole) -> str:
     text = parser.text()
     if len(text) < _MIN_EXCERPT_CHARS:
         raise DataArchitectureError("web source visible text insufficient")
+    return text
+
+
+def _excerpt_from_text(text: str, role: WebRole) -> str:
     lower = text.lower()
     hits = [lower.find(keyword.lower()) for keyword in role.keywords]
     hits = [index for index in hits if index >= 0]
@@ -131,6 +137,11 @@ def _excerpt(body: bytes, role: WebRole) -> str:
     if len(excerpt) < _MIN_EXCERPT_CHARS:
         raise DataArchitectureError("web source excerpt insufficient")
     return excerpt
+
+
+def _excerpt(body: bytes, role: WebRole) -> str:
+    """Compatibility helper retained for existing callers/tests."""
+    return _excerpt_from_text(_visible_text(body), role)
 
 
 def _fetch_one(role: WebRole, opener, now: datetime):
@@ -152,7 +163,9 @@ def _fetch_one(role: WebRole, opener, now: datetime):
                 body = response.read(_MAX_BODY_BYTES + 1)
             if not body or len(body) > _MAX_BODY_BYTES:
                 raise DataArchitectureError("web source response size invalid")
-            excerpt = _excerpt(body, role)
+            visible = _visible_text(body)
+            excerpt = _excerpt_from_text(visible, role)
+            fact_package = extract_role_facts(role.role, visible, now=now)
             digest = hashlib.sha256(body).hexdigest()
             stamp = now.astimezone(timezone.utc).isoformat()
             return build_web_context_item(
@@ -163,7 +176,10 @@ def _fetch_one(role: WebRole, opener, now: datetime):
                 authority=role.authority,
                 observed_at=stamp,
                 retrieved_at=stamp,
-                fact_summary=f"role={role.role}; source_excerpt={excerpt}",
+                fact_summary=(
+                    f"{fact_summary_prefix(role.role, fact_package)} "
+                    f"source_excerpt={excerpt}"
+                ),
             )
         except (HTTPError, URLError, TimeoutError, OSError, ValueError, DataArchitectureError):
             failures.append("FETCH_OR_VALIDATE_FAILED")
