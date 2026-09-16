@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from experiments.upstox_catalog import PublicInstrumentCatalog
 from experiments.upstox_instruments import resolve_global_instruments, resolve_nearest_nifty_future
-from experiments.upstox_quant_client import QuantReadOnlyClient
+from experiments.upstox_quant_client import INDIA_VIX, QuantReadOnlyClient
 from experiments.upstox_safe_diagnostics import diagnostic_code
 from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
 from experiments.upstox_transport import CurlOpener
@@ -62,8 +62,15 @@ def run(token):
 
         client = QuantReadOnlyClient(token, universe)
 
-        stage = "CORE_QUOTES_GLOBALS_VIX_FUTURE"
-        quotes = client.full_quotes(sorted(universe))
+        # Provider documentation supports global and domestic full quotes, but a mixed
+        # 14-key request returned HTTP 400 in the first broad probe. Prove each provider
+        # family separately so one unsupported identity cannot hide the others.
+        stage = "DOMESTIC_QUOTES_NIFTY_VIX_FUTURE"
+        domestic_quotes = client.full_quotes([NIFTY, INDIA_VIX, future["instrument_key"]])
+        global_quotes = {}
+        for target, identity in sorted(globals_by_id.items()):
+            stage = "GLOBAL_QUOTE_" + target.upper()
+            global_quotes[target] = client.full_quotes([identity["instrument_key"]])
 
         stage = "NIFTY_INTRADAY_15M"
         candle_15m = client.intraday(NIFTY, "minutes", 15)
@@ -86,6 +93,12 @@ def run(token):
         stage = "MAX_PAIN"
         max_pain = client.option_analytics("max_pain", expiry=expiry, date_value=today.isoformat(), bucket_interval=60)
 
+        quote_count = len(domestic_quotes["validated_instrument_tokens"]) + sum(
+            len(envelope["validated_instrument_tokens"]) for envelope in global_quotes.values()
+        )
+        if quote_count != len(universe):
+            raise PipelineError("Broad quote proof count mismatch")
+
         return {
             "status": "5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED",
             "source_semantic": "UPSTOX_AUTHENTICATED",
@@ -96,7 +109,12 @@ def run(token):
             "as_of_date_ist": today.isoformat(),
             "selected_nifty_expiry": expiry,
             "nfo_session": market_session["status"],
-            "core_quote_instruments_validated": len(quotes["validated_instrument_tokens"]),
+            "core_quote_instruments_validated": quote_count,
+            "quote_batching_proof": {
+                "domestic_instruments": len(domestic_quotes["validated_instrument_tokens"]),
+                "global_instruments_individually_validated": len(global_quotes),
+                "mixed_batch": "NOT_USED_AFTER_PROVIDER_HTTP_400",
+            },
             "nifty_intraday_candles": {
                 "15m": candle_15m["validated_candles"],
                 "30m": candle_30m["validated_candles"],
@@ -111,6 +129,7 @@ def run(token):
                 target: {
                     "instrument_key": identity["instrument_key"],
                     "provider_latency": identity["provider_latency"],
+                    "quote_provenance": _proof(global_quotes[target]),
                 }
                 for target, identity in sorted(globals_by_id.items())
             },
@@ -120,7 +139,7 @@ def run(token):
                 "nse": {"sha256": nse_master["sha256"], "received_at": nse_master["received_at"]},
             },
             "source_provenance": {
-                "contracts": _proof(contracts), "quotes": _proof(quotes),
+                "contracts": _proof(contracts), "domestic_quotes": _proof(domestic_quotes),
                 "15m": _proof(candle_15m), "30m": _proof(candle_30m), "1h": _proof(candle_1h),
                 "fii": _proof(fii), "dii": _proof(dii), "oi": _proof(oi), "change_oi": _proof(change_oi),
                 "pcr": _proof(pcr), "max_pain": _proof(max_pain),
