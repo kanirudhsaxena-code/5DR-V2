@@ -3,4 +3,4 @@
 No production side effect. Updating this marker is used only to exercise the
 [web-live] GitHub Actions gate on the experimental branch.
 """
-TRIGGER = "2026-09-16-governed-macro-facts-v1"
+TRIGGER = "2026-09-16-governed-macro-facts-v2"
