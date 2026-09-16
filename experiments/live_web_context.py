@@ -75,6 +75,7 @@ ROLE_SOURCES = (
         "OFFICIAL_WEB",
         "GOVERNMENT_OR_MULTILATERAL",
         (
+            "https://www.consilium.europa.eu/en/press/press-releases/?CouncilConfiguration=122512",
             "https://www.state.gov/press-releases/",
             "https://www.mea.gov.in/press-releases.htm",
         ),
