@@ -32,6 +32,25 @@ def _proof(envelope):
     return {"source_path": envelope["source_path"], "sha256": envelope["sha256"], "received_at": envelope["received_at"]}
 
 
+def _prove_global_live(client, target, identity):
+    """Use the provider surface empirically proven for each global segment.
+
+    Current Upstox documentation says Global Indicators are supported by intraday and
+    historical V3. A live Full Quote V3 request for Brent returned HTTP 400 on 16 Sep
+    2026, so indicators are proven via one-minute intraday candles instead of assuming
+    the quote surface. Global indices continue through Full Quote V3.
+    """
+    key = identity["instrument_key"]
+    segment = identity["segment"]
+    if segment == "GLOBAL_INDEX":
+        envelope = client.full_quotes([key])
+        return {"surface": "FULL_QUOTE_V3", "validated_records": len(envelope["validated_instrument_tokens"]), "envelope": envelope}
+    if segment == "GLOBAL_INDICATOR":
+        envelope = client.intraday(key, "minutes", 1)
+        return {"surface": "INTRADAY_CANDLE_V3", "validated_records": envelope["validated_candles"], "envelope": envelope}
+    raise PipelineError(f"Unsupported global segment for live proof: {target}")
+
+
 def run(token):
     stage = "INIT"
     try:
@@ -62,15 +81,13 @@ def run(token):
 
         client = QuantReadOnlyClient(token, universe)
 
-        # Provider documentation supports global and domestic full quotes, but a mixed
-        # 14-key request returned HTTP 400 in the first broad probe. Prove each provider
-        # family separately so one unsupported identity cannot hide the others.
         stage = "DOMESTIC_QUOTES_NIFTY_VIX_FUTURE"
         domestic_quotes = client.full_quotes([NIFTY, INDIA_VIX, future["instrument_key"]])
-        global_quotes = {}
+
+        global_live = {}
         for target, identity in sorted(globals_by_id.items()):
-            stage = "GLOBAL_QUOTE_" + target.upper()
-            global_quotes[target] = client.full_quotes([identity["instrument_key"]])
+            stage = "GLOBAL_LIVE_" + target.upper()
+            global_live[target] = _prove_global_live(client, target, identity)
 
         stage = "NIFTY_INTRADAY_15M"
         candle_15m = client.intraday(NIFTY, "minutes", 15)
@@ -93,11 +110,10 @@ def run(token):
         stage = "MAX_PAIN"
         max_pain = client.option_analytics("max_pain", expiry=expiry, date_value=today.isoformat(), bucket_interval=60)
 
-        quote_count = len(domestic_quotes["validated_instrument_tokens"]) + sum(
-            len(envelope["validated_instrument_tokens"]) for envelope in global_quotes.values()
-        )
-        if quote_count != len(universe):
-            raise PipelineError("Broad quote proof count mismatch")
+        global_count = len(global_live)
+        live_instrument_count = len(domestic_quotes["validated_instrument_tokens"]) + global_count
+        if live_instrument_count != len(universe):
+            raise PipelineError("Broad live proof count mismatch")
 
         return {
             "status": "5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED",
@@ -109,11 +125,13 @@ def run(token):
             "as_of_date_ist": today.isoformat(),
             "selected_nifty_expiry": expiry,
             "nfo_session": market_session["status"],
-            "core_quote_instruments_validated": quote_count,
-            "quote_batching_proof": {
-                "domestic_instruments": len(domestic_quotes["validated_instrument_tokens"]),
-                "global_instruments_individually_validated": len(global_quotes),
-                "mixed_batch": "NOT_USED_AFTER_PROVIDER_HTTP_400",
+            "core_live_instruments_validated": live_instrument_count,
+            "live_surface_proof": {
+                "domestic_full_quote_instruments": len(domestic_quotes["validated_instrument_tokens"]),
+                "global_indices_full_quote": sum(1 for p in global_live.values() if p["surface"] == "FULL_QUOTE_V3"),
+                "global_indicators_intraday": sum(1 for p in global_live.values() if p["surface"] == "INTRADAY_CANDLE_V3"),
+                "mixed_full_quote_batch": "NOT_USED_AFTER_PROVIDER_HTTP_400",
+                "global_indicator_full_quote": "NOT_USED_AFTER_BRENT_HTTP_400",
             },
             "nifty_intraday_candles": {
                 "15m": candle_15m["validated_candles"],
@@ -128,8 +146,11 @@ def run(token):
             "global_instruments": {
                 target: {
                     "instrument_key": identity["instrument_key"],
+                    "segment": identity["segment"],
                     "provider_latency": identity["provider_latency"],
-                    "quote_provenance": _proof(global_quotes[target]),
+                    "live_surface": global_live[target]["surface"],
+                    "validated_records": global_live[target]["validated_records"],
+                    "provenance": _proof(global_live[target]["envelope"]),
                 }
                 for target, identity in sorted(globals_by_id.items())
             },
