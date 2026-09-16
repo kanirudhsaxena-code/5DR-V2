@@ -30,9 +30,8 @@ def test_canonical_chain_reaches_learning_lab_without_production_mutation():
         actual_nifty=23100.0, source_type="WEB_RESEARCH", source_ref="fixture-close",
         verified=True, fresh=True,
     )
-    # UTC date is intentionally the same fixture date; production evidence remains timezone-aware.
     action = plan_checkpoint_capture(due, cp_evidence)
-    assert action.action_type == "CHECKPOINT"
+    assert action.kind == "CHECKPOINT"
 
     efficacy = checkpoint_to_efficacy(
         {"forecast_id": "E2E-F1", "bias": "BEARISH", "reference_spot": 23400.0, "zone_low": 23000.0, "zone_high": 23200.0},
@@ -43,7 +42,7 @@ def test_canonical_chain_reaches_learning_lab_without_production_mutation():
     assert len(observations) == 1
     assert observations[0]["dimension"] == "PROBABILITY_CALIBRATION"
 
-    # Repeat immutable observations only to exercise the governance threshold; no production writes exist here.
+    # Repeat deterministic observations only to exercise the governance threshold; no production writes exist here.
     support = hypothesis_gate(observations * 12, dimension="PROBABILITY_CALIBRATION")
     assert support["ready_for_challenger_testing"] is True
     assert support["production_change_allowed"] is False
