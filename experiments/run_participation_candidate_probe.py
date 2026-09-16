@@ -12,11 +12,8 @@ from experiments.upstox_transport import CurlOpener
 def run(token):
     master = PublicInstrumentCatalog().nse_instruments()
     candidate = resolve_candidate(master["records"])
-    universe = {
-        f"candidate_{index}": {"instrument_key": key}
-        for index, key in enumerate(candidate["instrument_keys"])
-    }
-    client = QuantReadOnlyClient(token, universe, opener=CurlOpener())
+    approved_instruments = frozenset(candidate["instrument_keys"])
+    client = QuantReadOnlyClient(token, approved_instruments, opener=CurlOpener())
 
     quote_proofs = []
     for key in candidate["instrument_keys"]:
