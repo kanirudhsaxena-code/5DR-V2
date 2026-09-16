@@ -1,13 +1,33 @@
 """Explicit Participation-engine acquisition universe for V2.2.3.
 
-The canonical specification requires an *approved* NIFTY heavyweight and sector-index
-set but does not enumerate exact instrument identities. This module deliberately has
-no implicit defaults: choosing constituents or sector indices changes what the
-Participation engine sees and therefore must not be invented by the acquisition layer.
+The canonical specification requires an approved NIFTY heavyweight and sector-index
+set. This module binds the user-approved 16 Sep 2026 universe to exact Upstox
+instrument identities. It does not change DES5 weights, screening, forecasting,
+tradeability, Learning Lab rules or any other methodology semantics.
 """
 from dataclasses import dataclass
 
 from experiments.data_contract import DataArchitectureError
+
+APPROVAL_REF = "user-explicit-2026-09-16-participation-v1"
+
+APPROVED_HEAVYWEIGHT_KEYS = (
+    "NSE_EQ|INE040A01034",  # HDFCBANK
+    "NSE_EQ|INE090A01021",  # ICICIBANK
+    "NSE_EQ|INE002A01018",  # RELIANCE
+    "NSE_EQ|INE397D01024",  # BHARTIARTL
+    "NSE_EQ|INE018A01030",  # LT
+    "NSE_EQ|INE062A01020",  # SBIN
+    "NSE_EQ|INE009A01021",  # INFY
+    "NSE_EQ|INE238A01034",  # AXISBANK
+)
+
+APPROVED_SECTOR_INDEX_KEYS = (
+    "NSE_INDEX|Nifty Fin Service",
+    "NSE_INDEX|NIFTY OIL AND GAS",
+    "NSE_INDEX|Nifty IT",
+    "NSE_INDEX|Nifty Auto",
+)
 
 
 @dataclass(frozen=True)
@@ -50,8 +70,32 @@ def build_participation_universe(*, heavyweight_keys, sector_index_keys, approva
     return ParticipationUniverse(heavyweights, sectors, approval_ref.strip())
 
 
+def approved_participation_universe():
+    universe = build_participation_universe(
+        heavyweight_keys=APPROVED_HEAVYWEIGHT_KEYS,
+        sector_index_keys=APPROVED_SECTOR_INDEX_KEYS,
+        approval_ref=APPROVAL_REF,
+    )
+    if len(universe.heavyweight_keys) != 8 or len(universe.sector_index_keys) != 4:
+        raise DataArchitectureError("approved participation universe cardinality mismatch")
+    return universe
+
+
+def approved_participation_gate():
+    universe = approved_participation_universe()
+    return {
+        "status": "READY",
+        "approval_ref": universe.approval_ref,
+        "heavyweight_keys": list(universe.heavyweight_keys),
+        "sector_index_keys": list(universe.sector_index_keys),
+        "missing_variables": [],
+        "screening_enabled": False,
+        "methodology_changed": False,
+    }
+
+
 def unresolved_participation_gate():
-    """Machine-readable fail-closed state until exact identities are explicitly approved."""
+    """Legacy fail-closed state retained for tests/backward audit only."""
     return {
         "status": "BLOCKED",
         "blocker": "PARTICIPATION_UNIVERSE_NOT_EXPLICITLY_APPROVED",

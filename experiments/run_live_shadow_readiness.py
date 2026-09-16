@@ -1,17 +1,41 @@
 """Live non-publishing readiness gate for a screenshot-free V2.2.3 5DR shadow run.
 
-This deliberately does not create a forecast. It proves current machine/chart/web lanes
-in one invocation and refuses READY while any canonical evidence family lacks an
-explicitly governed acquisition identity.
+This does not create or publish a forecast. It proves current machine/chart/web lanes
+plus the explicitly approved Participation universe in one invocation. Exact quote
+identity is revalidated live; prior proof alone is not accepted as current evidence.
 """
 import json
 import os
 
 from experiments.live_web_context import collect_live_web_context
-from experiments.participation_universe import unresolved_participation_gate
+from experiments.participation_universe import approved_participation_gate, approved_participation_universe
 from experiments.run_upstox_chart_probe import run as run_chart_probe
 from experiments.run_upstox_quant_probe import run as run_quant_probe
+from experiments.upstox_quant_client import QuantReadOnlyClient
 from experiments.upstox_safe_diagnostics import diagnostic_code
+from experiments.upstox_transport import CurlOpener
+
+
+def _prove_participation(token):
+    universe = approved_participation_universe()
+    keys = list(universe.heavyweight_keys + universe.sector_index_keys)
+    client = QuantReadOnlyClient(token, set(keys), opener=CurlOpener())
+    quotes = client.full_quotes(keys)
+    returned = quotes.get("validated_instrument_tokens")
+    if set(returned or ()) != set(keys) or len(returned or ()) != 12:
+        raise ValueError("approved participation live identity mismatch")
+    gate = approved_participation_gate()
+    return {
+        "status": gate["status"],
+        "approval_ref": gate["approval_ref"],
+        "validated_instrument_count": len(returned),
+        "heavyweight_count": len(universe.heavyweight_keys),
+        "sector_index_count": len(universe.sector_index_keys),
+        "source_path": quotes["source_path"],
+        "source_sha256": quotes["sha256"],
+        "received_at": quotes["received_at"],
+        "missing_variables": [],
+    }
 
 
 def run(token):
@@ -40,12 +64,12 @@ def run(token):
         }
 
     web = collect_live_web_context()
-    participation = unresolved_participation_gate()
+    participation = _prove_participation(token)
     blockers = []
     if web.get("status") != "5DR_LIVE_WEB_CONTEXT_PASSED":
         blockers.append("WEB_CONTEXT_NOT_READY")
     if participation.get("status") != "READY":
-        blockers.append(participation["blocker"])
+        blockers.append("PARTICIPATION_UNIVERSE_NOT_READY")
 
     return {
         "status": "READY_FOR_GOVERNED_JUDGMENT" if not blockers else "BLOCKED",
@@ -53,6 +77,10 @@ def run(token):
         "quant_status": quant["status"],
         "chart_status": chart["status"],
         "web_status": web["status"],
+        "participation_status": participation["status"],
+        "participation_approval_ref": participation["approval_ref"],
+        "participation_validated_instrument_count": participation["validated_instrument_count"],
+        "participation_source_sha256": participation["source_sha256"],
         "selected_nifty_expiry": quant["selected_nifty_expiry"],
         "nfo_session": quant["nfo_session"],
         "machine_families_proven": [
@@ -66,8 +94,10 @@ def run(token):
             "FII_INDEX_DERIVATIVES",
             "GLOBAL_RISK_INDICES",
             "CRUDE_USDINR",
+            "NIFTY_HEAVYWEIGHTS",
+            "NIFTY_SECTOR_INDICES",
         ],
-        "missing_machine_variables": participation["missing_variables"],
+        "missing_machine_variables": [],
         "web_roles": web["roles"],
         "chart_timeframes": sorted(chart["timeframes"]),
         "screenshot_required": False,
@@ -85,8 +115,6 @@ if __name__ == "__main__":
     try:
         result = run(os.environ.get("UPSTOX_ANALYTICS_TOKEN", ""))
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
-        # BLOCKED is an expected, successful fail-closed proof while an explicit
-        # configuration gate remains unresolved. Infrastructure failures still exit 2.
         if result["status"] not in {"READY_FOR_GOVERNED_JUDGMENT", "BLOCKED"}:
             raise SystemExit(2)
     except Exception as error:
