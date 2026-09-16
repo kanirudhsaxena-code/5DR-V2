@@ -1,7 +1,8 @@
-"""One-shot broad authenticated proof for the isolated 5DR quantitative backbone.
+"""Broad authenticated capability audit for the isolated 5DR quantitative backbone.
 
-Output is deliberately sanitized: identities, counts, latency classes and digests only.
-Live prices are test evidence and are not emitted as canonical 5DR market inputs.
+The audit is diagnostic, not a consumer feed. It tests each provider family independently
+so one unsupported/malformed surface cannot hide the rest of the coverage map. Output is
+sanitized: identities, schema fields, counts, latency classes and digests only.
 """
 import json
 import os
@@ -33,13 +34,6 @@ def _proof(envelope):
 
 
 def _prove_global_live(client, target, identity):
-    """Use the provider surface empirically proven for each global segment.
-
-    Current Upstox documentation says Global Indicators are supported by intraday and
-    historical V3. A live Full Quote V3 request for Brent returned HTTP 400 on 16 Sep
-    2026, so indicators are proven via one-minute intraday candles instead of assuming
-    the quote surface. Global indices continue through Full Quote V3.
-    """
     key = identity["instrument_key"]
     segment = identity["segment"]
     if segment == "GLOBAL_INDEX":
@@ -49,6 +43,44 @@ def _prove_global_live(client, target, identity):
         envelope = client.intraday(key, "minutes", 1)
         return {"surface": "INTRADAY_CANDLE_V3", "validated_records": envelope["validated_candles"], "envelope": envelope}
     raise PipelineError(f"Unsupported global segment for live proof: {target}")
+
+
+def _option_params(name, expiry, date_value):
+    params = {"instrument_key": NIFTY, "expiry": expiry, "date": date_value}
+    if name == "change_oi":
+        params["interval"] = 1
+    elif name in {"pcr", "max_pain"}:
+        params["bucket_interval"] = 60
+    return params
+
+
+def _audit_option_analytic(client, name, expiry, date_value):
+    try:
+        kwargs = {"expiry": expiry, "date_value": date_value}
+        if name == "change_oi":
+            kwargs["interval"] = 1
+        elif name in {"pcr", "max_pain"}:
+            kwargs["bucket_interval"] = 60
+        envelope = client.option_analytics(name, **kwargs)
+        return {"status": "LIVE_PROVEN", "provenance": _proof(envelope)}
+    except PipelineError as error:
+        result = {"status": "BLOCKED", "diagnostic_code": diagnostic_code(error)}
+        # One additional read-only request is allowed only to expose non-sensitive schema/
+        # identity metadata required to diagnose provider contract drift. No market values.
+        try:
+            raw = client.endpoint(name, _option_params(name, expiry, date_value))
+            data = raw["payload"]["data"]
+            if isinstance(data, dict):
+                result["response_fields"] = sorted(str(key) for key in data.keys())
+                if data.get("expiry") is not None:
+                    result["requested_expiry"] = expiry
+                    result["response_expiry"] = str(data.get("expiry"))
+                if data.get("instrument_key") is not None:
+                    result["response_instrument_key"] = str(data.get("instrument_key"))
+            result["diagnostic_provenance"] = _proof(raw)
+        except PipelineError as diagnostic_error:
+            result["diagnostic_request"] = diagnostic_code(diagnostic_error)
+        return result
 
 
 def run(token):
@@ -78,7 +110,6 @@ def run(token):
         nse_master = catalogs.nse_instruments()
         future = resolve_nearest_nifty_future(nse_master["records"], today)
         universe = build_core_5dr_universe(globals_by_id, future)
-
         client = QuantReadOnlyClient(token, universe)
 
         stage = "DOMESTIC_QUOTES_NIFTY_VIX_FUTURE"
@@ -101,22 +132,21 @@ def run(token):
         stage = "DII"
         dii = client.institutional("dii", "NSE_EQ|CASH")
 
-        stage = "OI"
-        oi = client.option_analytics("oi", expiry=expiry, date_value=today.isoformat())
-        stage = "CHANGE_OI"
-        change_oi = client.option_analytics("change_oi", expiry=expiry, date_value=today.isoformat(), interval=1)
-        stage = "PCR"
-        pcr = client.option_analytics("pcr", expiry=expiry, date_value=today.isoformat(), bucket_interval=60)
-        stage = "MAX_PAIN"
-        max_pain = client.option_analytics("max_pain", expiry=expiry, date_value=today.isoformat(), bucket_interval=60)
+        stage = "OPTION_ANALYTICS_CAPABILITY_AUDIT"
+        analytics = {
+            name: _audit_option_analytic(client, name, expiry, today.isoformat())
+            for name in ("oi", "change_oi", "pcr", "max_pain")
+        }
+        blocked = sorted(name for name, proof in analytics.items() if proof["status"] != "LIVE_PROVEN")
 
-        global_count = len(global_live)
-        live_instrument_count = len(domestic_quotes["validated_instrument_tokens"]) + global_count
+        live_instrument_count = len(domestic_quotes["validated_instrument_tokens"]) + len(global_live)
         if live_instrument_count != len(universe):
             raise PipelineError("Broad live proof count mismatch")
 
+        status = "5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED" if not blocked else "5DR_QUANT_BACKBONE_BROAD_PROBE_PARTIAL"
         return {
-            "status": "5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED",
+            "status": status,
+            "required_capability_blockers": blocked,
             "source_semantic": "UPSTOX_AUTHENTICATED",
             "read_only": True,
             "trading_enabled": False,
@@ -133,24 +163,14 @@ def run(token):
                 "mixed_full_quote_batch": "NOT_USED_AFTER_PROVIDER_HTTP_400",
                 "global_indicator_full_quote": "NOT_USED_AFTER_BRENT_HTTP_400",
             },
-            "nifty_intraday_candles": {
-                "15m": candle_15m["validated_candles"],
-                "30m": candle_30m["validated_candles"],
-                "1h": candle_1h["validated_candles"],
-            },
-            "institutional_data_types_validated": {
-                "fii": fii["validated_data_types"],
-                "dii": dii["validated_data_types"],
-            },
-            "option_analytics_validated": ["oi", "change_oi", "pcr", "max_pain"],
+            "nifty_intraday_candles": {"15m": candle_15m["validated_candles"], "30m": candle_30m["validated_candles"], "1h": candle_1h["validated_candles"]},
+            "institutional_data_types_validated": {"fii": fii["validated_data_types"], "dii": dii["validated_data_types"]},
+            "option_analytics": analytics,
             "global_instruments": {
                 target: {
-                    "instrument_key": identity["instrument_key"],
-                    "segment": identity["segment"],
-                    "provider_latency": identity["provider_latency"],
-                    "live_surface": global_live[target]["surface"],
-                    "validated_records": global_live[target]["validated_records"],
-                    "provenance": _proof(global_live[target]["envelope"]),
+                    "instrument_key": identity["instrument_key"], "segment": identity["segment"],
+                    "provider_latency": identity["provider_latency"], "live_surface": global_live[target]["surface"],
+                    "validated_records": global_live[target]["validated_records"], "provenance": _proof(global_live[target]["envelope"]),
                 }
                 for target, identity in sorted(globals_by_id.items())
             },
@@ -162,8 +182,7 @@ def run(token):
             "source_provenance": {
                 "contracts": _proof(contracts), "domestic_quotes": _proof(domestic_quotes),
                 "15m": _proof(candle_15m), "30m": _proof(candle_30m), "1h": _proof(candle_1h),
-                "fii": _proof(fii), "dii": _proof(dii), "oi": _proof(oi), "change_oi": _proof(change_oi),
-                "pcr": _proof(pcr), "max_pain": _proof(max_pain),
+                "fii": _proof(fii), "dii": _proof(dii),
             },
             "global_freshness_note": "Retrieval and provider-declared latency proven here; timestamp freshness enforcement remains a separate reliability gate.",
         }
@@ -175,15 +194,14 @@ def run(token):
 
 if __name__ == "__main__":
     try:
-        print(json.dumps(run(os.getenv("UPSTOX_ANALYTICS_TOKEN")), sort_keys=True, separators=(",", ":")))
+        result = run(os.getenv("UPSTOX_ANALYTICS_TOKEN"))
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        if result["status"] != "5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED":
+            raise SystemExit(2)
     except QuantProbeStageError as failure:
         print(json.dumps({
-            "status": "BLOCKED",
-            "read_only": True,
-            "trading_enabled": False,
-            "production_5dr_write_enabled": False,
-            "canonical_integration_enabled": False,
-            "stage": failure.stage,
-            "diagnostic_code": diagnostic_code(failure.error),
+            "status": "BLOCKED", "read_only": True, "trading_enabled": False,
+            "production_5dr_write_enabled": False, "canonical_integration_enabled": False,
+            "stage": failure.stage, "diagnostic_code": diagnostic_code(failure.error),
         }, sort_keys=True, separators=(",", ":")))
         raise SystemExit(2)
