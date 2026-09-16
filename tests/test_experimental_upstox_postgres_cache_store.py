@@ -114,7 +114,7 @@ class PostgresCacheStoreTests(unittest.TestCase):
         corrected = document(close=106, provenance=PROV_B)
         summary = store.write_document(corrected, expected_document_sha256=first["document_sha256"])
         self.assertEqual(summary["document_sha256"], corrected["document_sha256"])
-        self.assertEqual(store.read_document(SERIES_ID)["records"][0][4], 106)
+        self.assertEqual(store.read_document(SERIES_ID)["records"][0]["candle"][4], 106)
 
     def test_schema_identifier_injection_is_rejected(self):
         with self.assertRaises(DataArchitectureError):
