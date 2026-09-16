@@ -1,0 +1,72 @@
+{
+  "schema": "5dr-v2-2-3-shadow-comparison-observation-v1",
+  "gate": "G11_PAIRED_SCREENSHOT_ASSISTED_VS_STRUCTURED_SHADOW_COMPARISON",
+  "status": "NOT_COMPARABLE_TEMPORAL_MISMATCH",
+  "acceptance_decision_made": false,
+  "reference": {
+    "forecast_id": "5DR-20260916-1338-01",
+    "issuance_time_ist": "2026-09-16T13:38:00+05:30",
+    "evidence_mode": "LIVE_MARKET",
+    "validity_status": "VALID",
+    "spot_price": 23227.05,
+    "regime": "EVENT_SHOCK",
+    "component_scores": {
+      "PRICE_STRUCTURE": -45.0,
+      "PVPO": 30.0,
+      "PARTICIPATION": 0.0,
+      "MACRO_CATALYSTS": -90.0
+    },
+    "des5": -43.5,
+    "direction": "BEARISH",
+    "market_trust": 78.0,
+    "probabilities": {"BULL": 8.0, "RANGE": 35.0, "BEAR": 57.0},
+    "execution_edge": 58.5,
+    "recommendation": "NO_TRADE"
+  },
+  "structured_shadow": {
+    "request_id": "V223-SHADOW-20260916T090438Z",
+    "evidence_time_ist_approx": "2026-09-16T14:34:38+05:30",
+    "bundle_sha256": "675bed4af880a3bad01ab69bfae045ba00f1de9a3ba1f5d614da1d36f1b33617",
+    "regime": "TRANSITION",
+    "component_scores": {
+      "PRICE_STRUCTURE": -2.5,
+      "PVPO": 52.5,
+      "PARTICIPATION": 40.0,
+      "MACRO_CATALYSTS": -12.5
+    },
+    "des5": 15.125,
+    "direction": "MILD_BULL",
+    "market_trust": 64.25,
+    "probabilities": {"BULL": 45.735, "RANGE": 46.38, "BEAR": 7.885},
+    "execution_edge": 63.5,
+    "recommendation": "NO_TRADE"
+  },
+  "observation": {
+    "approx_elapsed_minutes": 56.63,
+    "tradeability_semantics_match": true,
+    "directional_label_match": false,
+    "regime_match": false,
+    "deltas_structured_minus_reference": {
+      "PRICE_STRUCTURE": 42.5,
+      "PVPO": 22.5,
+      "PARTICIPATION": 40.0,
+      "MACRO_CATALYSTS": 77.5,
+      "DES5": 58.625,
+      "MARKET_TRUST": -13.75,
+      "EXECUTION_EDGE": 5.0,
+      "BULL_PROBABILITY": 37.735,
+      "RANGE_PROBABILITY": 11.38,
+      "BEAR_PROBABILITY": -49.115
+    },
+    "diagnostic_flags": [
+      "EVIDENCE_WINDOWS_DIFFER",
+      "DIRECTIONAL_JUDGMENT_DIVERGENCE",
+      "REGIME_JUDGMENT_DIVERGENCE",
+      "MACRO_SCORE_DIVERGENCE",
+      "PARTICIPATION_COVERAGE_DIFFERENCE_POSSIBLE",
+      "DO_NOT_USE_FOR_ACCEPTANCE"
+    ]
+  },
+  "interpretation": "Both runs independently reached NO_TRADE, but the direction/regime/component differences are material. Because the snapshots are about 56 minutes apart, this record is observational only and must not be used to accept or reject screenshot retirement. The next governed comparison must use the same issuance-time evidence window or be marked NOT_COMPARABLE.",
+  "next_required_action": "ENRICH_GOVERNED_MACRO_FACTS_AND_RUN_SYNCHRONIZED_SAME_WINDOW_PAIR"
+}
