@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 import unittest
 
 from experiments.data_contract import DataArchitectureError
@@ -112,6 +114,22 @@ class ShadowValidationTests(unittest.TestCase):
         reference["evidence_fingerprint"] = "not-a-hash"
         with self.assertRaises(DataArchitectureError):
             build_pair_observation(reference, structured)
+
+    def test_locked_protocol_is_three_sessions_and_cannot_auto_activate(self):
+        path = Path(__file__).resolve().parents[1] / "experiments" / "g11_validation_protocol.json"
+        protocol = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(protocol["schema"], "5dr-v2-2-3-g11-validation-protocol-v1")
+        self.assertEqual(protocol["required_distinct_sessions"], 3)
+        self.assertEqual(protocol["target_sessions_ist"], ["2026-09-17", "2026-09-18", "2026-09-21"])
+        self.assertEqual(protocol["preferred_comparison_cutoff_ist"], "10:30:00+05:30")
+        self.assertTrue(protocol["exact_same_evidence_cutoff_required"])
+        self.assertFalse(protocol["automatic_acceptance_thresholds_defined"])
+        self.assertFalse(protocol["acceptance_decision_automatic"])
+        self.assertFalse(protocol["production_activation_decision_automatic"])
+        self.assertFalse(protocol["methodology_changed"])
+        self.assertFalse(protocol["production_5dr_write_enabled"])
+        self.assertFalse(protocol["lifecycle_write_enabled"])
+        self.assertFalse(protocol["trading_execution_enabled"])
 
 
 if __name__ == "__main__":
