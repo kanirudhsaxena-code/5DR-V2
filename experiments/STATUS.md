@@ -10,12 +10,12 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - G4 REPRESENTATIVE MULTI-TIMEFRAME HISTORICAL RETRIEVAL: PASS — live proven.
 - G5 DETERMINISTIC CHART-STRUCTURE DERIVATION: PASS — offline tests and live Upstox historical proof.
 - G6 FROZEN SCREENSHOT-FREE EVIDENCE BUNDLE CONTRACT: PASS offline; full production orchestration not yet connected.
-- G7 DURABLE HISTORICAL CACHE / RUN LEDGER: IN PROGRESS — hardened store boundary proven; real durable backend not yet approved or connected.
+- G7 DURABLE HISTORICAL CACHE / RUN LEDGER: IN PROGRESS — hardened store boundary plus isolated Postgres/Neon-capable adapter pass offline; no real durable backend has been approved or connected.
 - G8-A MARKET-CALENDAR-AWARE SCHEDULING POLICY: PASS offline; final production run windows not yet approved/activated.
 - G8-B WATCHDOG / IDEMPOTENCY / MISSED-RUN POLICY: PASS offline; production trigger not yet activated.
-- G9 AUTONOMOUS WEB-CONTEXT INGESTION: NOT YET INTEGRATED. Official/web context remains a separate explicit evidence lane.
-- G10 END-TO-END AUTONOMOUS 5DR RUN: NOT YET READY.
-- G11 SHADOW COMPARISON: NOT YET STARTED.
+- G9 AUTONOMOUS WEB-CONTEXT INGESTION: PARTIAL SCAFFOLDING EXISTS; existing governed event/web modules must be adapted to V2.2.3 evidence-bundle semantics and live-proven before production use.
+- G10 END-TO-END AUTONOMOUS 5DR RUN: IN PROGRESS. Existing source-neutral engine/orchestrator can accept AUTOMATED normalized evidence, but deterministic V2.2.3 evidence-to-engine normalization is the current missing forecast-generation bridge.
+- G11 SHADOW COMPARISON: EXISTING V2.2.2 SHADOW SCAFFOLDING EXISTS but is lifecycle/evidence oriented and still assumes the legacy screenshot/web EvidencePacket boundary; V2.2.3 structured-data forecast shadow path is not yet live-proven.
 - G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending later approval and prior gates.
 - G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
 - ROUTINE SCREENSHOT RETIREMENT: NOT YET ACTIVATED; evidence-layer chart dependency is now technically replaceable.
@@ -88,9 +88,11 @@ The bounded initial 5DR historical plan contains 29 series / 90 planned calls / 
 - Store-backed executor bridge: PASS — commit `3035937b6ba8f745193f5e741145549267fc2f8b`; executor writes must traverse reconciliation + validated document + compare-and-swap boundary.
 - Canonical/lifecycle storage is explicitly rejected by the cache adapter.
 - Test reference storage cannot be promoted by configuration accident.
+- Isolated Postgres/Neon-capable backend: PASS offline — commits `98c0ce3535715fc398e79378eec263b606406ca8` and test-fix `1ca414309ba9ae9243cc111586f7d65433c853e3`; JSONB document storage, transactional readback validation, compare-and-swap conflict protection, provider-neutral descriptor and `canonical_5dr_storage=false` are enforced. `production_approved=false` remains the default.
+- CI for the corrected durable adapter: run `35066068737`, job `104696520531`, SUCCESS. No network, cache, production or lifecycle writes occurred.
 
 READY FOR DURABLE CACHE BACKEND SELECTION: YES.
-READY FOR FULL HISTORICAL BACKFILL: NO — no durable backend has been approved/connected.
+READY FOR FULL HISTORICAL BACKFILL: NO — no real durable backend has been approved/connected.
 
 ## Screenshot-free evidence and timing controls
 
@@ -117,6 +119,14 @@ Commit `16b06ae0037c57886b4df2e629498750d16da089` added `5dr-frozen-evidence-bun
 - screenshot dependency is visible and can be prohibited.
 - the bundle itself cannot score, forecast, trade or write production 5DR.
 
+## Existing V2.2.2 autonomy scaffold audit
+
+The repository already contains reusable source-neutral forecast-engine components: `src/engine_contract.py`, `src/composed_engine.py`, `src/orchestrator.py` and `src/runner.py`. The engine contract already accepts provenance mode `AUTOMATED` and the deterministic composed engine preserves the existing model/output versions and scoring primitives.
+
+Separate V2.2.2 modules such as `src/evidence_bridge.py`, `src/evidence_handoff.py`, `src/production_activation.py` and `src/shadow_e2e.py` are primarily recommendation-lifecycle/evidence-accounting infrastructure. Their EvidencePacket source types remain intentionally limited to `SCREENSHOT` and `WEB_RESEARCH`; authenticated Upstox evidence must not be falsely relabelled to cross that boundary.
+
+Therefore V2.2.3 should reuse the source-neutral forecast engine while adding a distinct structured-data forecast handoff. The next bridge must transform governed V2.2.3 machine/chart/web evidence into the already-approved engine inputs without changing the frozen scoring semantics. Hard-coding new numeric/raw-score thresholds that are not already specified would constitute a methodology change and is not authorized by this automation amendment.
+
 Latest offline CI before the chart live proof: run `35065505693`, job `104694767102` — 145 experimental tests + 7 original safety tests = 152/152 PASS. The chart live-proof run repeated the same 145 + 7 tests successfully before completing the authenticated chart derivation.
 
 ## Security and isolation
@@ -132,8 +142,9 @@ Latest offline CI before the chart live proof: run `35065505693`, job `104694767
 
 ## Current next gate
 
-1. Build and test a concrete provider-neutral durable cache adapter, preferably against an isolated market-data database/project rather than the canonical 5DR lifecycle database. Keep it unapproved and disconnected from live writes until explicit approval.
-2. Finalize the autonomous orchestration layer that acquires machine evidence, requires official/web context, derives chart evidence, freezes the evidence bundle and hands it to the existing frozen 5DR engine.
-3. Propose final production run windows for approval, then wire the heartbeat/watchdog only after approval.
-4. Run screenshot-assisted versus structured-data shadow comparisons before retiring routine screenshots.
-5. Production integration/merge remains a final explicit approval gate.
+1. Implement the V2.2.3 structured-evidence-to-existing-engine handoff without relabelling Upstox as screenshot/web evidence and without inventing new scoring thresholds. Preserve the intelligence/judgment layer wherever the frozen specification does not define a deterministic machine threshold.
+2. Adapt the existing governed official/web research scaffold into the V2.2.3 frozen evidence bundle and prove that missing/failed sources block rather than imply `no event`.
+3. Select/connect an isolated durable market-cache backend only after explicit approval, then run the bounded historical backfill through the hardened adapter.
+4. Propose final production run windows for approval, then wire the heartbeat/watchdog only after approval.
+5. Run structured-data versus screenshot-assisted shadow comparisons before retiring routine screenshots.
+6. Production integration/merge remains a final explicit approval gate.
