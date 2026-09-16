@@ -8,7 +8,7 @@
     "2026-09-18",
     "2026-09-21"
   ],
-  "preferred_comparison_cutoff_ist": "10:30:00+05:30",
+  "preferred_comparison_cutoff_ist": "09:45:00+05:30",
   "reference_source_mode": "SCREENSHOT_ASSISTED",
   "structured_source_mode": "UPSTOX_STRUCTURED",
   "exact_same_window_required": true,
@@ -22,6 +22,7 @@
   "lifecycle_write_enabled": false,
   "trading_execution_enabled": false,
   "notes": [
+    "09:45 IST is an experimental G11 validation cutoff only; it is not a production 5DR run-time approval.",
     "A temporal mismatch is recorded as observational-only and cannot count toward the three comparable sessions.",
     "REVIEW_READY means only that three distinct comparable sessions were collected; it is not a PASS verdict.",
     "No numeric discrepancy threshold is invented in this execution-layer experiment; deltas are reported for governed review.",
