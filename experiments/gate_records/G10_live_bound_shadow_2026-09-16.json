@@ -1,0 +1,62 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G10_LIVE_BOUND_SHADOW",
+  "status": "PASS",
+  "date": "2026-09-16",
+  "workflow_run_id": 35078188409,
+  "workflow_job_id": 104735888140,
+  "commit_sha": "57c9a0972e77236f75172937c8a585fac6ae8b0e",
+  "evidence_bundle_sha256": "675bed4af880a3bad01ab69bfae045ba00f1de9a3ba1f5d614da1d36f1b33617",
+  "evidence_run_id": "V223-SHADOW-20260916T090438Z",
+  "engine": {
+    "model_version": "5DR_V2_1",
+    "output_contract_version": "5DR_V2_1_2",
+    "regime": "TRANSITION",
+    "component_scores": {
+      "PRICE_STRUCTURE": -2.5,
+      "PVPO": 52.5,
+      "PARTICIPATION": 40.0,
+      "MACRO_CATALYSTS": -12.5
+    },
+    "des5": 15.125,
+    "directional_label": "MILD_BULL",
+    "market_trust": 64.25,
+    "market_trust_band": "DEVELOPING",
+    "probabilities": {
+      "BULL": 45.735,
+      "RANGE": 46.38,
+      "BEAR": 7.885
+    },
+    "event_shock": "HIGH",
+    "execution_edge": 63.5,
+    "expected_rr": 1.8,
+    "tradeable": false,
+    "tradeability_blockers": [
+      "DES5_LT_30",
+      "EXECUTION_EDGE_LT_65",
+      "RR_LT_2"
+    ]
+  },
+  "test_results": {
+    "original_upstox_safety_tests": 7,
+    "experimental_tests": 190,
+    "all_passed": true
+  },
+  "isolation": {
+    "exact_cache_restore": true,
+    "screenshot_dependency": false,
+    "forecast_released": false,
+    "recommendation_released": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_merge_performed": false
+  },
+  "release_completeness": {
+    "horizon_release_complete": false,
+    "release_complete": false,
+    "note": "D+1 through D+5 zones were deliberately non-release shadow placeholders; this proves handoff/engine execution, not a production forecast release."
+  },
+  "next_gate": "G11_PAIRED_SCREENSHOT_ASSISTED_VS_STRUCTURED_SHADOW_COMPARISON"
+}
