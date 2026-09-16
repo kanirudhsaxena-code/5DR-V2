@@ -48,6 +48,40 @@ def _estimated_rows(row):
     return row["lookback_days"] * per_day
 
 
+def _series_digest(series):
+    canonical = json.dumps(series, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def verify_backfill_plan(plan):
+    if not isinstance(plan, dict) or plan.get("schema") != "experimental-5dr-backfill-plan-v1":
+        raise DataArchitectureError("backfill plan schema invalid")
+    if plan.get("consumer") != "5DR" or not isinstance(plan.get("series"), list):
+        raise DataArchitectureError("backfill plan consumer invalid")
+    series = plan["series"]
+    if plan.get("series_count") != len(series):
+        raise DataArchitectureError("backfill series count mismatch")
+    calls = sum(len(row.get("chunks", [])) for row in series if isinstance(row, dict))
+    rows = sum(row.get("estimated_rows_upper_bound", -1) for row in series if isinstance(row, dict))
+    if calls != plan.get("planned_calls") or rows != plan.get("estimated_rows_upper_bound"):
+        raise DataArchitectureError("backfill plan totals mismatch")
+    if plan.get("plan_sha256") != _series_digest(series):
+        raise DataArchitectureError("backfill plan fingerprint mismatch")
+    for row in series:
+        if not isinstance(row, dict) or not isinstance(row.get("series_id"), str) or not row["series_id"].startswith("5DR:"):
+            raise DataArchitectureError("backfill plan series identity invalid")
+        if row.get("timeframe") not in TIMEFRAME_MAP or not isinstance(row.get("chunks"), list):
+            raise DataArchitectureError("backfill plan series invalid")
+        for chunk in row["chunks"]:
+            if not isinstance(chunk, dict):
+                raise DataArchitectureError("backfill chunk invalid")
+            start = _date(chunk.get("start"), "chunk start")
+            end = _date(chunk.get("end"), "chunk end")
+            if start > end:
+                raise DataArchitectureError("backfill chunk reversed")
+    return {"calls": calls, "rows": rows, "series_count": len(series)}
+
+
 def build_initial_backfill_plan(as_of, *, latest_cached=None,
                                 budget=None, rows=SERIES):
     """Return a deterministic bounded plan without making network/storage calls."""
@@ -103,8 +137,7 @@ def build_initial_backfill_plan(as_of, *, latest_cached=None,
         raise DataArchitectureError("planned backfill exceeds call budget")
     if estimated_rows > budget.max_rows_retained:
         raise DataArchitectureError("planned backfill exceeds retention-row budget")
-    canonical = json.dumps(series_plans, sort_keys=True, separators=(",", ":"))
-    return {
+    plan = {
         "schema": "experimental-5dr-backfill-plan-v1",
         "consumer": "5DR",
         "as_of": end.isoformat(),
@@ -114,9 +147,11 @@ def build_initial_backfill_plan(as_of, *, latest_cached=None,
         "call_budget": budget.max_calls,
         "row_budget": budget.max_rows_retained,
         "billable_unit_budget": budget.max_billable_units,
-        "plan_sha256": hashlib.sha256(canonical.encode()).hexdigest(),
+        "plan_sha256": _series_digest(series_plans),
         "series": series_plans,
     }
+    verify_backfill_plan(plan)
+    return plan
 
 
 class BackfillExecutor:
@@ -131,14 +166,10 @@ class BackfillExecutor:
         self.allow_storage_writes = allow_storage_writes
 
     def execute(self, plan, *, dry_run=True):
-        if not isinstance(dry_run, bool) or not isinstance(plan, dict):
+        if not isinstance(dry_run, bool):
             raise DataArchitectureError("backfill execution request invalid")
-        calls = plan.get("planned_calls")
-        rows = plan.get("estimated_rows_upper_bound")
-        if isinstance(calls, bool) or not isinstance(calls, int) or calls < 0:
-            raise DataArchitectureError("backfill plan calls invalid")
-        if isinstance(rows, bool) or not isinstance(rows, int) or rows < 0:
-            raise DataArchitectureError("backfill plan rows invalid")
+        verified = verify_backfill_plan(plan)
+        calls, rows = verified["calls"], verified["rows"]
         if calls > self.budget.max_calls or rows > self.budget.max_rows_retained:
             raise DataArchitectureError("backfill execution budget exceeded")
         if self.budget.max_billable_units != 0:
@@ -170,8 +201,8 @@ class BackfillExecutor:
 
         ledger = UsageLedger(self.budget)
         writes = 0
-        for series in plan.get("series", []):
-            for chunk in series.get("chunks", []):
+        for series in plan["series"]:
+            for chunk in series["chunks"]:
                 envelope = self.provider.get_historical_candles(
                     series["instrument_key"], series["timeframe"],
                     date.fromisoformat(chunk["start"]), date.fromisoformat(chunk["end"]),

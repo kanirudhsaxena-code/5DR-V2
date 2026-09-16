@@ -42,7 +42,7 @@ jobs:
       - name: Experimental reliability and boundary tests
         run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
       - name: Curl read-only transport preflight
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: |
@@ -54,7 +54,7 @@ jobs:
           echo "curl_market_quote_http_status=${code}"
           test "${code}" = '200'
       - name: Authenticated read-only manifested live sample
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_manifested_sample
@@ -71,8 +71,13 @@ jobs:
       - name: Backfill/cache budget dry run
         if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[backfill-dry-run]')
         run: python -m experiments.run_backfill_dry_run
+      - name: Backfill one-call ephemeral live smoke
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[backfill-smoke]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_backfill_smoke
       - name: Time-separated duplicate and freshness reliability check
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
           UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
