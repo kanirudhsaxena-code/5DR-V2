@@ -29,7 +29,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -42,7 +42,7 @@ jobs:
       - name: Experimental reliability and boundary tests
         run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
       - name: Curl read-only transport preflight
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: |
@@ -54,7 +54,7 @@ jobs:
           echo "curl_market_quote_http_status=${code}"
           test "${code}" = '200'
       - name: Authenticated read-only manifested live sample
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_manifested_sample
@@ -81,6 +81,18 @@ jobs:
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_live_shadow_readiness
+      - name: Build frozen live shadow evidence bundle
+        id: live_bundle
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[live-bundle]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_live_shadow_bundle
+      - name: Save frozen live bundle by evidence digest
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-bundle]') && steps.live_bundle.outcome == 'success'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .shadow/live_bundle.json
+          key: 5dr-live-bundle-${{ steps.live_bundle.outputs.bundle_sha256 }}
       - name: Public Participation catalog identity diagnostic
         if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[participation-catalog]')
         run: python -m experiments.run_participation_catalog_diagnostic
@@ -98,7 +110,7 @@ jobs:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_backfill_smoke
       - name: Time-separated duplicate and freshness reliability check
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
           UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
