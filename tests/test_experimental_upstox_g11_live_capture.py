@@ -1,4 +1,3 @@
-import copy
 import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -16,7 +15,7 @@ def _bundle(frozen="2026-09-17T09:45:20+05:30"):
         "frozen_at": frozen,
         "bundle_sha256": "a" * 64,
         "runtime_context": {
-            "forecast_released": False,
+            "forecast_release_enabled": False,
             "production_5dr_write_enabled": False,
             "lifecycle_write_enabled": False,
             "trading_enabled": False,

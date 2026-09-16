@@ -127,7 +127,7 @@ def build_structured_capture(bundle, schedule, capture_started_at,
     if not isinstance(runtime, dict):
         raise DataArchitectureError("G11 runtime context missing")
     forbidden = (
-        "forecast_released", "production_5dr_write_enabled", "lifecycle_write_enabled",
+        "forecast_release_enabled", "production_5dr_write_enabled", "lifecycle_write_enabled",
         "trading_enabled", "canonical_integration_enabled", "methodology_changed",
     )
     if any(runtime.get(flag) is not False for flag in forbidden):
