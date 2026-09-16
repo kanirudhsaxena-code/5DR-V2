@@ -23,6 +23,15 @@ def _norm(value):
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
+def _safe_identity(row):
+    return {
+        "instrument_key": _text(row, "instrument_key"),
+        "trading_symbol": _text(row, "trading_symbol", "tradingsymbol"),
+        "name": _text(row, "name"),
+        "segment": _text(row, "segment"),
+    }
+
+
 def run():
     envelope = PublicInstrumentCatalog().nse_instruments()
     records = envelope["records"]
@@ -37,12 +46,7 @@ def run():
                 continue
             ts = _text(row, "trading_symbol", "tradingsymbol")
             if ts.casefold() == symbol.casefold():
-                matches.append({
-                    "instrument_key": key,
-                    "trading_symbol": ts,
-                    "name": _text(row, "name"),
-                    "segment": _text(row, "segment"),
-                })
+                matches.append(_safe_identity(row))
         equities[symbol] = matches[:5]
 
     sectors = {}
@@ -61,19 +65,26 @@ def run():
             combined = _norm(" ".join((ts, name, key_name)))
             tokens = set(combined.split())
             if desired_tokens and desired_tokens.issubset(tokens):
-                candidates.append({
-                    "instrument_key": key,
-                    "trading_symbol": ts,
-                    "name": name,
-                    "segment": _text(row, "segment"),
-                })
+                candidates.append(_safe_identity(row))
         sectors[desired] = candidates[:10]
+
+    financial_aliases = []
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        key = _text(row, "instrument_key")
+        if not key.startswith("NSE_INDEX|"):
+            continue
+        combined = _norm(" ".join((key, _text(row, "name"), _text(row, "trading_symbol", "tradingsymbol"))))
+        if "nifty" in combined and ("fin" in combined.split() or "financial" in combined.split()):
+            financial_aliases.append(_safe_identity(row))
 
     return {
         "status": "PARTICIPATION_CATALOG_DIAGNOSTIC_COMPLETE",
         "master_sha256": envelope["sha256"],
         "equities": equities,
         "sectors": sectors,
+        "financial_aliases": financial_aliases[:20],
         "authenticated_api_called": False,
         "activation_enabled": False,
         "screening_enabled": False,
