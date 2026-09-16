@@ -1,7 +1,7 @@
 """Freeze validated quantitative, derived-chart and external evidence for one 5DR run.
 
-The bundle is an immutable handoff boundary.  It does not score, forecast, recommend,
-write storage, invoke the web, or invoke a broker.  It exists so production 5DR can
+The bundle is an immutable handoff boundary. It does not score, forecast, recommend,
+write storage, invoke the web, or invoke a broker. It exists so production 5DR can
 consume one auditable evidence snapshot instead of screenshots or mutable live objects.
 """
 import hashlib
@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from experiments.data_contract import DataArchitectureError
 from experiments.data_requirements import requirements
+from experiments.web_context import SCHEMA as WEB_CONTEXT_SCHEMA, validate_web_context_item
 
 SCHEMA = "5dr-frozen-evidence-bundle-v1"
 RECORD_SCHEMA = "market-evidence-data-contract-v1"
@@ -93,6 +94,13 @@ def _validate_chart(chart):
 def _validate_external(item):
     if not isinstance(item, dict):
         raise DataArchitectureError("external evidence invalid")
+
+    # Rich V2.2.3 research evidence preserves the exact bounded fact summary and its
+    # fingerprint inside the frozen bundle. Legacy metadata-only fixtures remain valid
+    # for backward-compatible contract tests but are not sufficient for G9 live use.
+    if item.get("context_schema") == WEB_CONTEXT_SCHEMA:
+        return validate_web_context_item(item)
+
     category = item.get("category")
     semantic = item.get("source_semantic")
     reference = item.get("source_reference")
