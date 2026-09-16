@@ -32,12 +32,12 @@ def _record(source_mode, session_date, window, cutoff, fingerprint, request_id, 
 class ShadowValidationTests(unittest.TestCase):
     def test_exact_pair_is_comparable_and_never_auto_accepts(self):
         reference = _record(
-            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "a" * 64, "ref-1",
+            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "a" * 64, "ref-1",
         )
         structured = _record(
-            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "b" * 64, "struct-1",
+            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "b" * 64, "struct-1",
             _result(des5=12.0, trust=71.5, edge=69.0, bull=26.0, range_=49.0, bear=25.0),
         )
         observation = build_pair_observation(reference, structured)
@@ -51,12 +51,12 @@ class ShadowValidationTests(unittest.TestCase):
 
     def test_temporal_mismatch_is_observational_only(self):
         reference = _record(
-            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "a" * 64, "ref-1",
+            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "a" * 64, "ref-1",
         )
         structured = _record(
-            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:31:00+05:30", "b" * 64, "struct-1",
+            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:46:00+05:30", "b" * 64, "struct-1",
         )
         observation = build_pair_observation(reference, structured)
         self.assertEqual(observation["status"], "OBSERVATIONAL_ONLY")
@@ -67,8 +67,8 @@ class ShadowValidationTests(unittest.TestCase):
         observations = []
         for index, session_date in enumerate(("2026-09-17", "2026-09-18", "2026-09-21"), start=1):
             compact = session_date.replace("-", "")
-            window = f"G11-{compact}-1030"
-            cutoff = f"{session_date}T10:30:00+05:30"
+            window = f"G11-{compact}-0945"
+            cutoff = f"{session_date}T09:45:00+05:30"
             reference = _record(
                 "SCREENSHOT_ASSISTED", session_date, window, cutoff,
                 f"{index:x}" * 64, f"ref-{index}", _result(des5=10.0 + index),
@@ -88,12 +88,12 @@ class ShadowValidationTests(unittest.TestCase):
 
     def test_duplicate_comparable_session_fails_closed(self):
         reference = _record(
-            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "a" * 64, "ref-1",
+            "SCREENSHOT_ASSISTED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "a" * 64, "ref-1",
         )
         structured = _record(
-            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "b" * 64, "struct-1",
+            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "b" * 64, "struct-1",
         )
         observation = build_pair_observation(reference, structured)
         with self.assertRaises(DataArchitectureError):
@@ -101,12 +101,12 @@ class ShadowValidationTests(unittest.TestCase):
 
     def test_bad_source_mode_or_fingerprint_fails_closed(self):
         reference = _record(
-            "WRONG", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "a" * 64, "ref-1",
+            "WRONG", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "a" * 64, "ref-1",
         )
         structured = _record(
-            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-1030",
-            "2026-09-17T10:30:00+05:30", "b" * 64, "struct-1",
+            "UPSTOX_STRUCTURED", "2026-09-17", "G11-20260917-0945",
+            "2026-09-17T09:45:00+05:30", "b" * 64, "struct-1",
         )
         with self.assertRaises(DataArchitectureError):
             build_pair_observation(reference, structured)
@@ -121,7 +121,7 @@ class ShadowValidationTests(unittest.TestCase):
         self.assertEqual(protocol["schema"], "5dr-v2-2-3-g11-validation-protocol-v1")
         self.assertEqual(protocol["required_distinct_sessions"], 3)
         self.assertEqual(protocol["target_sessions_ist"], ["2026-09-17", "2026-09-18", "2026-09-21"])
-        self.assertEqual(protocol["preferred_comparison_cutoff_ist"], "10:30:00+05:30")
+        self.assertEqual(protocol["preferred_comparison_cutoff_ist"], "09:45:00+05:30")
         self.assertTrue(protocol["exact_same_evidence_cutoff_required"])
         self.assertFalse(protocol["automatic_acceptance_thresholds_defined"])
         self.assertFalse(protocol["acceptance_decision_automatic"])
