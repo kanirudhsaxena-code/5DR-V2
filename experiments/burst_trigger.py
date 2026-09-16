@@ -4,4 +4,4 @@ This file has no runtime behavior. Updating its marker value intentionally trigg
 only the experimental read-only burst workflow on the experiment branch.
 """
 
-TRIGGER_MARKER = "manual-check-2026-09-16T09:40:00+05:30"
+TRIGGER_MARKER = "burst-2026-09-16T09:43:50+05:30"
