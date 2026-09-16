@@ -17,6 +17,9 @@ class ReadOnlyProviderAdapter:
     def get_candles(self, instrument_key, timeframe):
         raise NotImplementedError
 
+    def get_historical_candles(self, instrument_key, timeframe, start, end):
+        raise NotImplementedError
+
     def get_institutional(self, kind, data_types, interval="1D"):
         raise NotImplementedError
 
@@ -24,9 +27,4 @@ class ReadOnlyProviderAdapter:
         raise NotImplementedError
 
     def describe(self):
-        return {
-            "provider_id": self.provider_id,
-            "source_semantic": self.source_semantic,
-            "read_only": True,
-            "capabilities": sorted(self.capabilities),
-        }
+        return {"provider_id": self.provider_id, "source_semantic": self.source_semantic, "read_only": True, "capabilities": sorted(self.capabilities)}

@@ -7,7 +7,7 @@ No order, account, portfolio, funds, database, lifecycle or forecast surface exi
 import hashlib
 import json
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request
@@ -41,6 +41,43 @@ def _validate_envelope_payload(payload):
         raise PipelineError("Unexpected Upstox response schema")
 
 
+def _validate_candle_envelope(envelope):
+    data = envelope["payload"]["data"]
+    rows = data.get("candles") if isinstance(data, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise PipelineError("Candle array missing")
+    seen = set()
+    for row in rows:
+        if not isinstance(row, list) or len(row) != 7:
+            raise PipelineError("Candle schema mismatch")
+        stamp = datetime.fromisoformat(row[0])
+        if stamp.tzinfo is None or stamp in seen:
+            raise PipelineError("Naive or duplicate candle timestamp")
+        seen.add(stamp)
+        validate_ohlc(row[1], row[2], row[3], row[4], volume=row[5], open_interest=row[6])
+    envelope["validated_candles"] = len(rows)
+    return envelope
+
+
+def _canonical_expiry(value):
+    """Normalize only the two provider-observed/documented unambiguous date formats.
+
+    Upstox requests use ISO YYYY-MM-DD. Live OI/change-OI responses on 16 Sep 2026
+    returned DD-MM-YYYY. Both are accepted only when they parse to an exact date; all
+    other forms fail closed.
+    """
+    if not isinstance(value, str) or not value:
+        raise PipelineError("Option analytics expiry invalid")
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(value, "%d-%m-%Y").date().isoformat()
+    except ValueError:
+        raise PipelineError("Option analytics expiry invalid") from None
+
+
 class QuantReadOnlyClient:
     def __init__(self, token, approved_instruments, opener=None, sleep=time.sleep):
         if not isinstance(token, str) or not token.strip():
@@ -72,11 +109,7 @@ class QuantReadOnlyClient:
         url = BASE + path + ("?" + query if query else "")
         for attempt in range(3):
             self._sleep(1)
-            request = Request(
-                url,
-                headers={"Accept": "application/json", "Authorization": "Bearer " + self._token},
-                method="GET",
-            )
+            request = Request(url, headers={"Accept": "application/json", "Authorization": "Bearer " + self._token}, method="GET")
             try:
                 with self._opener.open(request, timeout=20) as response:
                     raw = response.read(MAX_RESPONSE_BYTES + 1)
@@ -84,13 +117,7 @@ class QuantReadOnlyClient:
                     raise PipelineError("Response exceeds size limit")
                 payload = json.loads(raw)
                 _validate_envelope_payload(payload)
-                return {
-                    "received_at": datetime.now(timezone.utc).isoformat(),
-                    "source_path": path,
-                    "parameters": params,
-                    "sha256": hashlib.sha256(raw).hexdigest(),
-                    "payload": payload,
-                }
+                return {"received_at": datetime.now(timezone.utc).isoformat(), "source_path": path, "parameters": params, "sha256": hashlib.sha256(raw).hexdigest(), "payload": payload}
             except HTTPError as error:
                 if error.code in (401, 403):
                     raise PipelineError("Analytics Token expired, invalid, or lacks access") from None
@@ -140,22 +167,12 @@ class QuantReadOnlyClient:
     def intraday(self, instrument_key, unit, interval):
         key = self._require_approved(instrument_key)[0]
         path = historical_path(key, unit, interval, intraday=True)
-        envelope = self._get(path)
-        data = envelope["payload"]["data"]
-        rows = data.get("candles") if isinstance(data, dict) else None
-        if not isinstance(rows, list) or not rows:
-            raise PipelineError("Candle array missing")
-        seen = set()
-        for row in rows:
-            if not isinstance(row, list) or len(row) != 7:
-                raise PipelineError("Candle schema mismatch")
-            stamp = datetime.fromisoformat(row[0])
-            if stamp.tzinfo is None or stamp in seen:
-                raise PipelineError("Naive or duplicate candle timestamp")
-            seen.add(stamp)
-            validate_ohlc(row[1], row[2], row[3], row[4], volume=row[5], open_interest=row[6])
-        envelope["validated_candles"] = len(rows)
-        return envelope
+        return _validate_candle_envelope(self._get(path))
+
+    def historical(self, instrument_key, unit, interval, start, end):
+        key = self._require_approved(instrument_key)[0]
+        path = historical_path(key, unit, interval, start=start, end=end, intraday=False)
+        return _validate_candle_envelope(self._get(path))
 
     def institutional(self, name, data_types, interval="1D"):
         if name not in {"fii", "dii"}:
@@ -192,7 +209,7 @@ class QuantReadOnlyClient:
         if not isinstance(data, dict) or not data:
             raise PipelineError("Option analytics response missing")
         if name == "oi":
-            if data.get("expiry") != expiry:
+            if _canonical_expiry(data.get("expiry")) != expiry:
                 raise PipelineError("OI expiry mismatch")
             rows = data.get("call_put_oi_data_list")
             if not isinstance(rows, list) or not rows:
@@ -203,12 +220,14 @@ class QuantReadOnlyClient:
                 validate_price(row.get("strike_price"), "strike_price")
                 validate_nonnegative(row.get("call_oi"), "call_oi")
                 validate_nonnegative(row.get("put_oi"), "put_oi")
+            envelope["validated_expiry"] = expiry
         elif name == "change_oi":
             rows = data.get("call_put_oi_data_list")
             if not isinstance(rows, list) or not rows:
                 raise PipelineError("Change OI strike data missing")
-            if data.get("expiry") != expiry:
+            if _canonical_expiry(data.get("expiry")) != expiry:
                 raise PipelineError("Change OI expiry mismatch")
+            envelope["validated_expiry"] = expiry
         else:
             if data.get("instrument_key") != NIFTY:
                 raise PipelineError("Option analytics underlying mismatch")

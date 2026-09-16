@@ -88,6 +88,12 @@ def historical_path(instrument_key, unit, interval, *, start=None, end=None, int
         raise PipelineError("Historical unit invalid")
     if isinstance(interval, bool) or not isinstance(interval, int) or interval <= 0:
         raise PipelineError("Historical interval invalid")
+    if unit == "minutes" and interval > 300:
+        raise PipelineError("Historical minute interval invalid")
+    if unit == "hours" and interval > 5:
+        raise PipelineError("Historical hour interval invalid")
+    if unit == "days" and interval != 1:
+        raise PipelineError("Historical day interval invalid")
     encoded = quote(instrument_key, safe="")
     if intraday:
         if start is not None or end is not None:
