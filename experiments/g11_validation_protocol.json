@@ -1,0 +1,30 @@
+{
+  "schema": "5dr-v2-2-3-g11-validation-protocol-v1",
+  "status": "ACTIVE_EXPERIMENT_ONLY",
+  "objective": "Collect three distinct same-cutoff paired observations before any decision to retire routine screenshots or activate production structured-data runtime.",
+  "required_distinct_sessions": 3,
+  "target_sessions_ist": [
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-21"
+  ],
+  "preferred_comparison_cutoff_ist": "10:30:00+05:30",
+  "reference_source_mode": "SCREENSHOT_ASSISTED",
+  "structured_source_mode": "UPSTOX_STRUCTURED",
+  "exact_same_window_required": true,
+  "exact_same_evidence_cutoff_required": true,
+  "distinct_session_required": true,
+  "automatic_acceptance_thresholds_defined": false,
+  "acceptance_decision_automatic": false,
+  "production_activation_decision_automatic": false,
+  "methodology_changed": false,
+  "production_5dr_write_enabled": false,
+  "lifecycle_write_enabled": false,
+  "trading_execution_enabled": false,
+  "notes": [
+    "A temporal mismatch is recorded as observational-only and cannot count toward the three comparable sessions.",
+    "REVIEW_READY means only that three distinct comparable sessions were collected; it is not a PASS verdict.",
+    "No numeric discrepancy threshold is invented in this execution-layer experiment; deltas are reported for governed review.",
+    "PR #30 remains draft and unmerged until explicit production integration approval."
+  ]
+}
