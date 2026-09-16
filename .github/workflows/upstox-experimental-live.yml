@@ -42,7 +42,7 @@ jobs:
       - name: Experimental reliability and boundary tests
         run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
       - name: Curl read-only transport preflight
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: |
@@ -54,7 +54,7 @@ jobs:
           echo "curl_market_quote_http_status=${code}"
           test "${code}" = '200'
       - name: Authenticated read-only manifested live sample
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_upstox_manifested_sample
@@ -81,6 +81,11 @@ jobs:
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_live_shadow_readiness
+      - name: Non-binding Participation candidate live proof
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[participation-probe]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_participation_candidate_probe
       - name: Backfill/cache budget dry run
         if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[backfill-dry-run]')
         run: python -m experiments.run_backfill_dry_run
@@ -90,7 +95,7 @@ jobs:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_backfill_smoke
       - name: Time-separated duplicate and freshness reliability check
-        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]')
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]')
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
           UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
