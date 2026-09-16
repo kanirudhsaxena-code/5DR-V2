@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-from experiments.live_shadow_bundle import build_live_shadow_bundle, build_public_judgment_summary
+from experiments.live_shadow_bundle_v3_quote_fix import build_live_shadow_bundle, build_public_judgment_summary
 from experiments.upstox_safe_diagnostics import diagnostic_code
 
 OUTPUT = Path(".shadow/live_bundle.json")
