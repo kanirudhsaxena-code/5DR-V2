@@ -5,6 +5,8 @@ bundle provides auditable facts; the 5DR intelligence/judgment layer supplies th
 normalized fields already required by the existing source-neutral engine contract.
 The judgment must be cryptographically bound to the exact bundle it interpreted.
 """
+import hashlib
+import json
 from copy import deepcopy
 
 from experiments.data_contract import DataArchitectureError
@@ -26,6 +28,12 @@ REQUIRED_ENGINE_INPUTS = frozenset({
 })
 
 
+def _recompute_bundle_sha256(bundle):
+    body = {key: value for key, value in bundle.items() if key != "bundle_sha256"}
+    encoded = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _validate_bundle(bundle):
     if not isinstance(bundle, dict) or bundle.get("schema") != BUNDLE_SCHEMA:
         raise DataArchitectureError("engine handoff bundle schema invalid")
@@ -34,13 +42,16 @@ def _validate_bundle(bundle):
     digest = bundle.get("bundle_sha256")
     if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest.lower()):
         raise DataArchitectureError("engine handoff bundle digest invalid")
+    digest = digest.lower()
+    if _recompute_bundle_sha256(bundle) != digest:
+        raise DataArchitectureError("engine handoff bundle fingerprint mismatch")
     policy = bundle.get("screenshot_policy")
     if not isinstance(policy, dict) or policy.get("screenshot_dependency") is not False:
         raise DataArchitectureError("engine handoff requires screenshot-free evidence")
     for key in ("directional_score_assigned", "forecast_released", "trading_enabled", "production_5dr_write_enabled"):
         if bundle.get(key) is not False:
             raise DataArchitectureError("engine handoff bundle crossed isolation boundary")
-    return digest.lower()
+    return digest
 
 
 def _validate_judgment(judgment, expected_bundle_sha256):
