@@ -1,0 +1,62 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G10B_MACRO_ENRICHED_LIVE_SHADOW",
+  "status": "PASS_DIAGNOSTIC",
+  "date": "2026-09-16",
+  "workflow_run_id": 35079827793,
+  "workflow_job_id": 104741049991,
+  "commit_sha": "4afbb333fd4b0bf8cb91681cf7e2841879c2e8d8",
+  "evidence_bundle_sha256": "1016031fee2463372584e7eb74528de3efc8226a9c80a10035d17547b1382914",
+  "evidence_run_id": "V223-SHADOW-20260916T092655Z",
+  "engine": {
+    "regime": "EVENT_SHOCK",
+    "component_scores": {
+      "PRICE_STRUCTURE": -10.0,
+      "PVPO": 52.5,
+      "PARTICIPATION": 40.0,
+      "MACRO_CATALYSTS": -42.5
+    },
+    "des5": -5.5,
+    "directional_label": "RANGE",
+    "market_trust": 64.55,
+    "market_trust_band": "DEVELOPING",
+    "probabilities": {
+      "BULL": 24.32,
+      "RANGE": 51.361,
+      "BEAR": 24.32
+    },
+    "event_shock": "HIGH",
+    "execution_edge": 64.75,
+    "expected_rr": 1.8,
+    "tradeable": false,
+    "tradeability_blockers": [
+      "DES5_LT_30",
+      "EXECUTION_EDGE_LT_65",
+      "RR_LT_2"
+    ]
+  },
+  "macro_fact_quality": {
+    "FED_H15": "FACT_EXTRACTED",
+    "FOMC_CALENDAR": "FACT_EXTRACTED",
+    "RBI": "FACT_EXTRACTED",
+    "DXY_OWNER": "REFERENCE_ONLY",
+    "GEOPOLITICS": "REFERENCE_ONLY"
+  },
+  "tests": {
+    "original_upstox_safety_tests": 7,
+    "experimental_tests": 201,
+    "all_passed": true
+  },
+  "isolation": {
+    "exact_cache_restore": true,
+    "forecast_released": false,
+    "recommendation_released": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_merge_performed": false
+  },
+  "interpretation": "Adding governed official macro facts changed the one-off shadow from the earlier MILD_BULL interpretation to RANGE while retaining NO_TRADE. This is evidence-quality progress, not a same-window G11 parity result and not a production methodology change.",
+  "next_gate": "G11_SYNCHRONIZED_SAME_WINDOW_PAIR"
+}
