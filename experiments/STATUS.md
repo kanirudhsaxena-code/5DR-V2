@@ -1,21 +1,24 @@
-# Experimental market-data acquisition status
+# Experimental 5DR autonomous market-data status
 
-Canonical 5DR V2.2.2 remains untouched. PR #30 stays experimental and must not be merged or connected to production consumers without explicit approval.
+PR #30 remains experimental, draft and unmerged. The Drive canonical specification is now 5DR V2.2.3, an operational automation amendment only. Production forecasting/scoring semantics remain frozen and no experimental code is connected to the canonical production consumer without explicit approval.
 
-## Core acquisition gates
+## Current gate summary
 
-- BUILT: PASS — isolated read-only Upstox acquisition, hardened curl transport, exact CE/PE identity, NFO session guard, freshness validation, deterministic snapshot fingerprints, duplicate policy and sanitized manifests exist.
-- TESTED: PASS — run `35063064829`, job `104687324518`, passed 115 experimental tests plus 7 original Upstox safety tests = 122/122 PASS.
-- LIVE VERIFIED: PASS — authenticated NIFTY spot/candles/options plus the broader provisioned quantitative families are live proven.
-- RELIABILITY VERIFIED: PASS — closed-session behavior, open-session advancement and the four-window burst are proven.
-- REPRESENTATIVE HISTORY VERIFIED: PASS — eight bounded historical calls completed successfully in run `35061881459`, job `104683799954`.
-- BACKFILL PLAN DRY RUN: PASS — 29 series / 90 planned calls / 115,305-row upper bound; zero provider calls and zero writes in run `35062522905`, job `104685665398`.
-- SINGLE-CHUNK EXECUTION SMOKE: PASS — one authenticated NIFTY 5m historical call, 300 rows, one ephemeral-memory write and zero persistent writes in run `35062661078`, job `104686085567`.
-- CACHE RECONCILIATION: PASS — exact-overlap deduplication, provider-correction audit, retention, tamper detection and deterministic dataset fingerprints passed in run `35062823635`, job `104686579088`.
-- CACHE STORE CONTRACT / REFERENCE BACKEND: PASS — provider-neutral document contract plus atomic test-only filesystem backend passed in run `35063064829`, job `104687324518`.
-- READY FOR DURABLE CACHE BACKEND SELECTION: YES.
-- READY FOR FULL HISTORICAL BACKFILL: NO — no durable cache backend has been approved or connected.
-- READY FOR PRODUCTION 5DR INTEGRATION: NO — integration remains a separate explicit approval gate.
+- G1 CORE OPEN-MARKET ACQUISITION RELIABILITY: PASS.
+- G2 OPTION IDENTITY / FRESHNESS / DUPLICATE / READ-ONLY BOUNDARY: PASS.
+- G3 BROAD 5DR QUANTITATIVE UPSTOX UNIVERSE: PASS — live proven.
+- G4 REPRESENTATIVE MULTI-TIMEFRAME HISTORICAL RETRIEVAL: PASS — live proven.
+- G5 DETERMINISTIC CHART-STRUCTURE DERIVATION: PASS — offline tests and live Upstox historical proof.
+- G6 FROZEN SCREENSHOT-FREE EVIDENCE BUNDLE CONTRACT: PASS offline; full production orchestration not yet connected.
+- G7 DURABLE HISTORICAL CACHE / RUN LEDGER: IN PROGRESS — hardened store boundary proven; real durable backend not yet approved or connected.
+- G8-A MARKET-CALENDAR-AWARE SCHEDULING POLICY: PASS offline; final production run windows not yet approved/activated.
+- G8-B WATCHDOG / IDEMPOTENCY / MISSED-RUN POLICY: PASS offline; production trigger not yet activated.
+- G9 AUTONOMOUS WEB-CONTEXT INGESTION: NOT YET INTEGRATED. Official/web context remains a separate explicit evidence lane.
+- G10 END-TO-END AUTONOMOUS 5DR RUN: NOT YET READY.
+- G11 SHADOW COMPARISON: NOT YET STARTED.
+- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending later approval and prior gates.
+- G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
+- ROUTINE SCREENSHOT RETIREMENT: NOT YET ACTIVATED; evidence-layer chart dependency is now technically replaceable.
 
 ## Open-market reliability proof — 16 Sep 2026
 
@@ -33,7 +36,9 @@ Burst run `35054637198`, job `104662116005`, completed successfully:
 
 Run `35060738861`, job `104680311692`, status `5DR_QUANT_BACKBONE_BROAD_PROBE_PASSED`.
 
-Live-proven families include NIFTY/India VIX/nearest NIFTY future; NIFTY 15m/30m/1h; FII cash/index futures/index options; DII cash; OI/change-OI/PCR/max pain; GIFT Nifty, S&P 500, Dow, US Tech 100, DAX, FTSE 100, Nikkei 225, Hang Seng, Brent, WTI and USD/INR. Global indices use the quote surface; Brent/WTI/USDINR use the candle surface. Provider-declared latency remains explicit. OI/change-OI expiry identity is compared semantically after strict ISO/DD-MM-YYYY normalization.
+Live-proven families include NIFTY/India VIX/nearest NIFTY future; NIFTY 15m/30m/1h; FII cash/index futures/index options; DII cash; OI/change-OI/PCR/max pain; GIFT Nifty, S&P 500, Dow, US Tech 100, DAX, FTSE 100, Nikkei 225, Hang Seng, Brent, WTI and USD/INR. Provider-declared latency remains explicit and derivative expiry identity is normalized strictly.
+
+Qualitative/event fields unavailable from Upstox remain OFFICIAL_WEB / WEB_RESEARCH evidence. They are never fabricated or proxied as authenticated broker data.
 
 ## Representative historical proof
 
@@ -41,32 +46,78 @@ Run `35061881459`, job `104683799954`, used exactly eight authenticated read-onl
 
 Validated counts:
 
-- NIFTY 5m: 300 candles (9–15 Sep 2026).
+- NIFTY 5m: 300 candles.
 - NIFTY 15m: 100 candles.
 - NIFTY 30m: 52 candles.
 - NIFTY 1h: 28 candles.
-- NIFTY 1d: 31 candles (3 Aug–15 Sep 2026 trading dates).
+- NIFTY 1d: 31 candles.
 - India VIX 1d: 31 candles.
 - S&P 500 1d: 32 candles.
 - Brent 1d: 31 candles.
 
-The probe explicitly reported `full_backfill_started=false`, `cache_storage_write_enabled=false`, `production_5dr_write_enabled=false`, `canonical_integration_enabled=false` and `trading_enabled=false`.
+No full backfill, persistent cache write, production 5DR write, canonical integration or trading action occurred.
 
-## Backfill/cache execution safeguards
+## Live chart-derivation proof
 
-Commit `bac4535fbdbb34d933462c129ea99dc8b502b83d` introduced a bounded 5DR-only candle inventory and dry-run-first executor. The initial plan contains 29 series and 90 calls under explicit ceilings of 250 calls, 250,000 retained rows and zero billable units. A complete cache eliminates all calls; a partial cache plans only the missing tail with a one-day overlap for safe deduplication.
+Commit `27edaa729b2f7b19ab3a11c25cd9c3f2e70e6f40`; run `35065714571`, job `104695407603`.
 
-Commit `dc5220f2a4fed8cdd8a5ddb477edbd3597cd6e37` added plan integrity verification and the first live executor smoke. Plan fingerprint, series count, call count and row estimate are verified before any provider call. Network and storage writes have independent explicit gates. The live smoke made exactly one authenticated GET for NIFTY 5m (9–15 Sep), received 300 candles and wrote them only to process-local ephemeral memory. No persistent cache, database or canonical lifecycle write occurred.
+Status: `5DR_LIVE_CHART_DERIVATION_PASSED` using exactly five authenticated read-only historical GETs.
 
-Commit `6d9dd8abe3765fbfe075d70b1a64fb410199c1d1` added storage-neutral reconciliation rules. Exact overlaps deduplicate without market mutation; same-timestamp provider corrections are explicitly linked to the superseded market fingerprint; malformed/tampered records fail closed; retention is deterministic; dataset SHA-256 is based on normalized market content.
+Real NIFTY candle history processed:
 
-Commit `125509068a4c89867edf756f35091857362b4991` added the provider-neutral `MarketCacheStore` document boundary and a JSON filesystem reference backend. The reference backend is hard-locked to `test_mode=True`, is marked `production_approved=false`, uses hashed filenames, atomic replace, compare-and-swap overwrite protection, corruption detection, stale-temp recovery, document/dataset fingerprints and correction-audit preservation. All filesystem writes in CI use temporary test directories only.
+- 5m: 675 bars; execution-only.
+- 15m: 225 bars.
+- 30m: 117 bars.
+- 1h: 63 bars.
+- 1d: 62 bars.
 
-## Provider-neutral data-core checkpoint
+The engine derived swing/trend structure, prior-range acceptance/break state, liquidity-sweep state, failed-breakout state, recent gaps and multi-timeframe alignment directly from OHLC history. The live sample produced a mixed multi-timeframe alignment, which is evidence rather than a forecast or recommendation.
 
-The experiment contains a common normalized evidence contract, declarative requirements for 5DR/EDGE Stocks/IPO EDGE, cost-aware request policy, incremental planning, usage budgets, generic read-only provider boundary, Upstox adapter, historical chunking, backfill planning/execution guards, reconciliation logic and a provider-neutral cache-store contract. EDGE Stocks and IPO EDGE remain provisioned but background-disabled. There is no all-stock collection, all-option-chain archive, tick archive or 30-level depth archive.
+NIFTY index volume was zero/non-applicable in the sampled series. The engine therefore returned `VOLUME_NOT_APPLICABLE_OR_UNAVAILABLE` and `VOLUME_UNAVAILABLE` for anchored VWAP rather than manufacturing volume evidence. Futures/derivative participation remains the valid lane for volume/OI confirmation.
 
-Consumers depend on the normalized data contract rather than Upstox response schemas. Upstox remains semantically `UPSTOX_AUTHENTICATED`; it is never relabelled as SCREENSHOT or WEB_RESEARCH. Qualitative/event fields unavailable from Upstox remain external evidence rather than being fabricated or proxied.
+The probe explicitly returned `screenshot_required=false`, `directional_score_assigned=false`, `forecast_released=false`, `cache_storage_write_enabled=false`, `production_5dr_write_enabled=false`, `canonical_integration_enabled=false` and `trading_enabled=false`.
+
+## Backfill and durable-cache safeguards
+
+The bounded initial 5DR historical plan contains 29 series / 90 planned calls / 115,305-row upper bound under explicit ceilings of 250 calls, 250,000 retained rows and zero planned billable units.
+
+- Dry run: PASS — run `35062522905`, job `104685665398`; zero provider calls and zero writes.
+- Single-chunk live smoke: PASS — run `35062661078`, job `104686085567`; one NIFTY 5m historical GET, 300 rows, process-local ephemeral memory only.
+- Reconciliation: PASS — overlap dedupe, provider correction audit, retention, tamper detection and deterministic dataset fingerprinting.
+- Provider-neutral `MarketCacheStore`: PASS with atomic test-only reference backend.
+- Store-backed executor bridge: PASS — commit `3035937b6ba8f745193f5e741145549267fc2f8b`; executor writes must traverse reconciliation + validated document + compare-and-swap boundary.
+- Canonical/lifecycle storage is explicitly rejected by the cache adapter.
+- Test reference storage cannot be promoted by configuration accident.
+
+READY FOR DURABLE CACHE BACKEND SELECTION: YES.
+READY FOR FULL HISTORICAL BACKFILL: NO — no durable backend has been approved/connected.
+
+## Screenshot-free evidence and timing controls
+
+Commit `1833cd659fe651488190c6dfcc63b91d2ced09fa` finalized deterministic chart-structure tests without weakening fail-closed validation.
+
+Commit `b1c69457e132e3cc131a66e7c396a8ac7967ad68` added the pure autonomous schedule/watchdog policy:
+
+- Asia/Kolkata canonical timezone.
+- existing 15:20 prior-day / 09:15 target-day canonical boundary preserved.
+- configurable bounded run windows.
+- NSE closed-date and special-open-date injection.
+- deterministic per-window run key for idempotency.
+- `UPCOMING`, `DUE`, `COMPLETED`, `MISSED` states.
+- a missed run is exposed as `MISSED`; late evidence is not silently masqueraded as an on-time forecast.
+
+Commit `16b06ae0037c57886b4df2e629498750d16da089` added `5dr-frozen-evidence-bundle-v1`:
+
+- only validated 5DR quantitative records may enter.
+- required machine variables must be present.
+- 1d/1h/30m/15m chart evidence is mandatory at the bundle boundary; 5m remains execution-only.
+- official/web context remains a separate explicit evidence lane.
+- required missing web context blocks the bundle rather than being inferred.
+- duplicate evidence is rejected.
+- screenshot dependency is visible and can be prohibited.
+- the bundle itself cannot score, forecast, trade or write production 5DR.
+
+Latest offline CI before the chart live proof: run `35065505693`, job `104694767102` — 145 experimental tests + 7 original safety tests = 152/152 PASS. The chart live-proof run repeated the same 145 + 7 tests successfully before completing the authenticated chart derivation.
 
 ## Security and isolation
 
@@ -74,12 +125,15 @@ Consumers depend on the normalized data contract rather than Upstox response sch
 - No order placement/modification/cancellation surface.
 - No portfolio, funds or account action surface.
 - Analytics Token only via GitHub secret; no token/header in audit manifests.
-- No database credential or production lifecycle writer in this experiment.
-- No canonical scoring, weights, probability, recommendation, efficacy or Learning Lab changes.
+- No production lifecycle/database writer is connected to the experimental data path.
+- No canonical scoring, weight, probability, recommendation, efficacy or Learning Lab mutation.
 - No production 5DR/EDGE writes.
-- Reference filesystem cache is test-only and cannot instantiate without explicit `test_mode=True`.
 - PR #30 remains draft/unmerged.
 
 ## Current next gate
 
-Select and explicitly approve a real durable cache backend that implements the provider-neutral `MarketCacheStore` contract while remaining isolated from canonical 5DR lifecycle storage. Only after that backend passes conformance, atomicity/recovery, credential isolation and read/write-boundary tests should the bounded 90-call initial historical backfill be enabled. Production 5DR integration remains a later, separate approval gate.
+1. Build and test a concrete provider-neutral durable cache adapter, preferably against an isolated market-data database/project rather than the canonical 5DR lifecycle database. Keep it unapproved and disconnected from live writes until explicit approval.
+2. Finalize the autonomous orchestration layer that acquires machine evidence, requires official/web context, derives chart evidence, freezes the evidence bundle and hands it to the existing frozen 5DR engine.
+3. Propose final production run windows for approval, then wire the heartbeat/watchdog only after approval.
+4. Run screenshot-assisted versus structured-data shadow comparisons before retiring routine screenshots.
+5. Production integration/merge remains a final explicit approval gate.
