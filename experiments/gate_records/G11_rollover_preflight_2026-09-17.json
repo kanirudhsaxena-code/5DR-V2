@@ -1,0 +1,35 @@
+{
+  "schema": "5dr-v2-2-3-gate-preflight-record-v1",
+  "gate": "G11_NEXT_SESSION_ROLLOVER_PREFLIGHT",
+  "status": "PREPARED_OFFLINE_CI_PASS",
+  "prepared_date": "2026-09-17",
+  "implementation": {
+    "validator_path": "experiments/g11_rollover.py",
+    "test_path": "tests/test_experimental_g11_rollover.py",
+    "validated_implementation_commit": "4fac3c3dcbcc6a7583ae5712c4651e780b6fd056"
+  },
+  "ci": {
+    "full_5dr_ci_run": 35205014215,
+    "full_5dr_ci_conclusion": "success",
+    "experimental_upstox_readonly_run": 35205014081,
+    "experimental_upstox_readonly_conclusion": "success"
+  },
+  "offline_failure_modes_covered": [
+    "same-session evidence cannot count as rollover",
+    "prior-session bundle reuse fails closed",
+    "prior-session market-status evidence fails closed",
+    "stale expiry set fails closed",
+    "capture fingerprint mutation fails closed",
+    "deterministic replay hash mismatch fails closed",
+    "duplicate rollover run key fails closed",
+    "production/write/trading safety-boundary crossing fails closed"
+  ],
+  "live_rollover_completed": false,
+  "g11_completed": false,
+  "screenshot_retirement_activated": false,
+  "production_activation_allowed": false,
+  "pr30_merge_allowed": false,
+  "methodology_changed": false,
+  "full_historical_backfill_started": false,
+  "next_step": "Execute exactly one lightweight live next-session rollover validation in the next NSE session using the prepared validator; do not repeat G11 manual runs 1-3 and do not request screenshots unless an actual anomaly requires diagnostics."
+}
