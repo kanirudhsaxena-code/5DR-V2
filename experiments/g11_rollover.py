@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from experiments.data_contract import DataArchitectureError
 from experiments.g11_live_capture import CAPTURE_SCHEMA
 from experiments.upstox_session import OPEN_STATUSES, select_session_valid_expiry
+from phase1.upstox import PipelineError
 
 IST = ZoneInfo("Asia/Kolkata")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -152,7 +153,10 @@ def validate_next_session_rollover(*, previous_series, current_capture,
 
     if not isinstance(active_expiries, (list, tuple, set, frozenset)) or not active_expiries:
         raise DataArchitectureError("G11 rollover active expiries missing")
-    selected_expiry = select_session_valid_expiry(list(active_expiries), current_session, status)
+    try:
+        selected_expiry = select_session_valid_expiry(list(active_expiries), current_session, status)
+    except (PipelineError, ValueError, TypeError):
+        raise DataArchitectureError("G11 rollover expiry identity invalid") from None
     if _iso_date(selected_expiry, "G11 selected expiry") < current_session:
         raise DataArchitectureError("G11 rollover selected expiry is stale")
 
