@@ -46,4 +46,12 @@ jobs:
         env:
           EXPECTED_MANUAL_RUN_ID: ${{ steps.meta.outputs.manual_run_id }}
           EXPECTED_BUNDLE_SHA: ${{ steps.meta.outputs.bundle_sha256 }}
+          G11_PUBLIC_SUMMARY_PATH: .shadow/g11_capture/public_summary.json
         run: python -m experiments.run_g11_cached_public_summary
+      - name: Upload bounded public comparison summary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: g11-public-summary-${{ steps.meta.outputs.manual_run_id }}
+          path: .shadow/g11_capture/public_summary.json
+          if-no-files-found: error
+          retention-days: 1
