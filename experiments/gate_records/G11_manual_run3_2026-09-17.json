@@ -1,7 +1,7 @@
 {
   "schema": "5dr-v2-2-3-gate-record-v1",
   "gate": "G11_MANUAL_PAIRED_VALIDATION_RUN_3",
-  "status": "CONDITIONAL_PASS",
+  "status": "PASS",
   "date": "2026-09-17",
   "manual_run_id": "G11-20260917-141937",
   "capture_workflow_run_id": 35201773897,
@@ -13,9 +13,9 @@
   "bundle_sha256": "ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881",
   "cache_key": "5dr-g11-manual-G11-20260917-141937-ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881",
   "screenshot_window_ist": {
-    "earliest_received": "2026-09-17T14:21:33+05:30",
-    "latest_received": "2026-09-17T14:22:41+05:30",
-    "preferred_window_le_3m_for_most_evidence": true,
+    "earliest": "2026-09-17T14:21:18+05:30",
+    "latest": "2026-09-17T14:22:41+05:30",
+    "preferred_window_le_3m_for_core_pair": true,
     "hard_cap_le_5m": true
   },
   "spot_reconciliation": {
@@ -42,22 +42,53 @@
     "material_divergence": false
   },
   "chart_reconciliation": {
+    "5m": {
+      "screenshot_timestamp_ist": "2026-09-17T14:21:18+05:30",
+      "screenshot_close": 23283.75,
+      "structured_close": 23283.85,
+      "structured_trend": "DOWNTREND_STRUCTURE_LH_LL",
+      "assessment": "MATCH_SHARP_REJECTION_FROM_INTRADAY_HIGH_FOLLOWED_BY_WEAK_RECOVERY"
+    },
+    "15m": {
+      "screenshot_timestamp_ist": "2026-09-17T14:21:23+05:30",
+      "screenshot_close": 23284.6,
+      "structured_close": 23283.85,
+      "structured_trend": "UPTREND_STRUCTURE_HH_HL",
+      "assessment": "MATCH_LOCAL_RECOVERY_STRUCTURE_WITHIN_BROADER_WEAKNESS"
+    },
+    "30m": {
+      "screenshot_timestamp_ist": "2026-09-17T14:21:28+05:30",
+      "screenshot_close": 23285.2,
+      "structured_close": 23283.85,
+      "structured_trend": "UPTREND_STRUCTURE_HH_HL",
+      "assessment": "MATCH_LOCAL_HH_HL_RECOVERY_INSIDE_BROADER_DECLINE"
+    },
     "1h": {
+      "screenshot_timestamp_ist": "2026-09-17T14:21:32+05:30",
       "screenshot_close": 23285.9,
       "structured_close": 23283.85,
+      "structured_trend": "UPTREND_STRUCTURE_HH_HL",
       "assessment": "MATCH_LOCAL_RECOVERY_STRUCTURE_WITHIN_BROADER_DECLINE"
     },
     "1d": {
+      "screenshot_timestamp_ist": "2026-09-17T14:21:37+05:30",
       "screenshot_live_close": 23285.3,
       "structured_last_completed_close": 23217.6,
       "structured_trend": "DOWNTREND_STRUCTURE_LH_LL",
       "assessment": "MATCH_HIGHER_TIMEFRAME_DOWNTREND_WITH_CURRENT_SESSION_BOUNCE"
     },
-    "missing_screenshot_timeframes": ["5m", "15m", "30m"],
     "structured_alignment_excluding_5m": "MIXED",
-    "material_pvs_divergence_on_received_chart_evidence": false
+    "material_pvs_divergence": false
   },
-  "conditional_reason": "Market-data parity is clean, but 5m/15m/30m screenshots for this exact Run-3 window were not present in the uploaded set. Full PASS requires those already-captured screenshots or a replacement clean Run 3.",
+  "mismatch_explanations": [
+    "approximately 100 to 184 seconds screenshot-versus-structured timing difference",
+    "provider refresh cadence",
+    "live intrabar movement",
+    "Sensibull OI rounding in lakh units",
+    "provider-specific IV representation",
+    "synthetic future versus exchange-traded future construction",
+    "daily live candle versus last completed daily candle"
+  ],
   "isolation": {
     "forecast_released": false,
     "production_5dr_write_enabled": false,
@@ -66,5 +97,6 @@
     "methodology_changed": false,
     "production_merge_performed": false
   },
-  "next": "UPLOAD_ALREADY_CAPTURED_5M_15M_30M_OR_REPLACE_RUN_3_LATER_SESSION"
+  "conclusion": "PASS: all five chart timeframes plus spot, listed futures and option-chain evidence reconcile without material 5DR/PVS divergence.",
+  "next": "CONSOLIDATE_THREE_MANUAL_RUNS_THEN_NEXT_SESSION_ROLLOVER"
 }
