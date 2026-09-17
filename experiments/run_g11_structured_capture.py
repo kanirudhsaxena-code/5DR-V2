@@ -1,12 +1,11 @@
-"""Freeze one exact-cutoff structured evidence capture for G11.
+"""Freeze one user-approved manual structured evidence capture for G11.
 
-The runner may wait briefly for the approved 09:45 IST cutoff. It stores the immutable
-bundle and its G11 capture metadata only in the GitHub Actions workspace/cache. It does
+The workflow starts only after the user-approved trigger file is updated. It stores the
+immutable bundle and capture metadata in the GitHub Actions workspace/cache only. It does
 not publish a forecast, write canonical/production state, or trade.
 """
 import json
 import os
-import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -26,9 +25,6 @@ def run():
     token = os.environ.get("UPSTOX_ANALYTICS_TOKEN", "")
     if not token:
         raise DataArchitectureError("G11 Upstox token missing")
-    initial = schedule_capture(datetime.now(IST))
-    if initial["wait_seconds"]:
-        time.sleep(initial["wait_seconds"])
     started = datetime.now(IST)
     schedule = schedule_capture(started)
     bundle = build_live_shadow_bundle(token)
@@ -37,8 +33,9 @@ def run():
     BUNDLE_FILE.write_text(json.dumps(bundle, sort_keys=True, separators=(",", ":"), default=str), encoding="utf-8")
     CAPTURE_FILE.write_text(json.dumps(capture, sort_keys=True, separators=(",", ":")), encoding="utf-8")
     result = {
-        "status": "G11_STRUCTURED_EVIDENCE_CAPTURED",
+        "status": "G11_MANUAL_STRUCTURED_EVIDENCE_CAPTURED",
         "pair_id": capture["comparison_window_id"],
+        "manual_run_id": capture["manual_run_id"],
         "session_date_ist": capture["session_date_ist"],
         "evidence_cutoff_ist": capture["evidence_cutoff_ist"],
         "capture_started_at_ist": capture["capture_started_at_ist"],
@@ -53,7 +50,7 @@ def run():
         "production_5dr_write_enabled": False,
         "lifecycle_write_enabled": False,
         "trading_enabled": False,
-        "canonical_integration_enabled": False,
+        "canonical_integration_enabled": False
     }
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     github_output = os.environ.get("GITHUB_OUTPUT")
@@ -77,6 +74,6 @@ if __name__ == "__main__":
             "production_5dr_write_enabled": False,
             "lifecycle_write_enabled": False,
             "trading_enabled": False,
-            "canonical_integration_enabled": False,
+            "canonical_integration_enabled": False
         }, sort_keys=True, separators=(",", ":")))
         raise SystemExit(2)
