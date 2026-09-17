@@ -1,0 +1,70 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G11_MANUAL_PAIRED_VALIDATION_RUN_3",
+  "status": "CONDITIONAL_PASS",
+  "date": "2026-09-17",
+  "manual_run_id": "G11-20260917-141937",
+  "capture_workflow_run_id": 35201773897,
+  "comparison_workflow_run_id": 35201932046,
+  "trigger_commit_sha": "f9cedec82f47ab2cb52434ee32c1dab99df18572",
+  "comparison_commit_sha": "b07a8ab0a3a89d4b0b406c8ae884ce322730bdbf",
+  "evidence_cutoff_ist": "2026-09-17T14:19:37.618705+05:30",
+  "bundle_frozen_at_ist": "2026-09-17T14:20:25.854857+05:30",
+  "bundle_sha256": "ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881",
+  "cache_key": "5dr-g11-manual-G11-20260917-141937-ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881",
+  "screenshot_window_ist": {
+    "earliest_received": "2026-09-17T14:21:33+05:30",
+    "latest_received": "2026-09-17T14:22:41+05:30",
+    "preferred_window_le_3m_for_most_evidence": true,
+    "hard_cap_le_5m": true
+  },
+  "spot_reconciliation": {
+    "sensibull_spot_nearest": 23288.0,
+    "upstox_spot": 23288.8,
+    "difference_points": 0.8,
+    "difference_pct": 0.0034,
+    "material": false
+  },
+  "futures_reconciliation": {
+    "sensibull_29_sep_exchange_future_nearest": 23328.5,
+    "upstox_exchange_future": 23327.0,
+    "difference_points": 1.5,
+    "difference_pct": 0.0064,
+    "material": false
+  },
+  "option_chain": {
+    "expiry": "2026-09-22",
+    "strikes_compared": [23200, 23250, 23300, 23350, 23400],
+    "max_observed_ltp_abs_difference_points": 1.1,
+    "absolute_oi_pattern": "CLOSE_MATCH_APPROX_WITHIN_1_5_PERCENT",
+    "oi_change_direction": "MATCH_ALL_COMPARED_CE_PE_LEGS",
+    "iv_pattern": "CONSISTENT_PROVIDER_SPECIFIC_REPRESENTATION",
+    "material_divergence": false
+  },
+  "chart_reconciliation": {
+    "1h": {
+      "screenshot_close": 23285.9,
+      "structured_close": 23283.85,
+      "assessment": "MATCH_LOCAL_RECOVERY_STRUCTURE_WITHIN_BROADER_DECLINE"
+    },
+    "1d": {
+      "screenshot_live_close": 23285.3,
+      "structured_last_completed_close": 23217.6,
+      "structured_trend": "DOWNTREND_STRUCTURE_LH_LL",
+      "assessment": "MATCH_HIGHER_TIMEFRAME_DOWNTREND_WITH_CURRENT_SESSION_BOUNCE"
+    },
+    "missing_screenshot_timeframes": ["5m", "15m", "30m"],
+    "structured_alignment_excluding_5m": "MIXED",
+    "material_pvs_divergence_on_received_chart_evidence": false
+  },
+  "conditional_reason": "Market-data parity is clean, but 5m/15m/30m screenshots for this exact Run-3 window were not present in the uploaded set. Full PASS requires those already-captured screenshots or a replacement clean Run 3.",
+  "isolation": {
+    "forecast_released": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_merge_performed": false
+  },
+  "next": "UPLOAD_ALREADY_CAPTURED_5M_15M_30M_OR_REPLACE_RUN_3_LATER_SESSION"
+}
