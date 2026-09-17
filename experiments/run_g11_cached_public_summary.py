@@ -2,8 +2,8 @@
 
 This reads the immutable cached bundle produced by a manual G11 run. It performs no
 network acquisition, no forecast release, no persistence and no trading. Only public
-market values needed for screenshot comparison are printed; source content and secrets
-are never emitted.
+market values needed for screenshot comparison are printed/written; source content and
+secrets are never emitted.
 """
 from __future__ import annotations
 
@@ -16,6 +16,10 @@ from experiments.data_contract import DataArchitectureError
 
 BUNDLE_PATH = Path('.shadow/g11_capture/bundle.json')
 CAPTURE_PATH = Path('.shadow/g11_capture/capture.json')
+SUMMARY_PATH = Path(os.environ.get(
+    'G11_PUBLIC_SUMMARY_PATH',
+    '.shadow/g11_capture/public_summary.json',
+))
 
 
 def _load(path: Path):
@@ -88,29 +92,41 @@ def run():
             'PE': _side_summary(row.get('PE', {})),
         })
 
-    chart = bundle.get('chart_evidence', {})
+    # Frozen evidence bundles store the validated multi-timeframe chart layer under
+    # derived_chart_evidence. Retain the legacy fallback only for older experiment
+    # fixtures; this changes validation observability, not 5DR methodology.
+    chart = bundle.get('derived_chart_evidence') or bundle.get('chart_evidence', {})
     tf_summary = {}
     for tf, item in (chart.get('timeframes') or {}).items():
         if not isinstance(item, dict):
             continue
+        trend = item.get('trend_structure') or {}
+        range_event = item.get('range_event') or {}
         tf_summary[tf] = {
             'latest_timestamp': item.get('latest_timestamp'),
             'latest_close': item.get('latest_close'),
-            'trend_structure': (item.get('trend_structure') or {}).get('state'),
-            'high_sequence': (item.get('trend_structure') or {}).get('high_sequence'),
-            'low_sequence': (item.get('trend_structure') or {}).get('low_sequence'),
-            'close_state': (item.get('range_event') or {}).get('close_state'),
-            'liquidity_sweep': (item.get('range_event') or {}).get('liquidity_sweep'),
+            'trend_structure': trend.get('state'),
+            'high_sequence': trend.get('high_sequence'),
+            'low_sequence': trend.get('low_sequence'),
+            'latest_swing_highs': item.get('latest_swing_highs'),
+            'latest_swing_lows': item.get('latest_swing_lows'),
+            'prior_range_high': range_event.get('prior_range_high'),
+            'prior_range_low': range_event.get('prior_range_low'),
+            'close_state': range_event.get('close_state'),
+            'liquidity_sweep': range_event.get('liquidity_sweep'),
             'failed_breakout': item.get('failed_breakout'),
+            'recent_gaps': item.get('recent_gaps'),
             'execution_only': item.get('execution_only'),
         }
 
+    runtime = bundle.get('runtime_context', {})
     result = {
         'status': 'G11_CACHED_PUBLIC_SUMMARY_READY',
         'manual_run_id': capture.get('manual_run_id'),
         'evidence_cutoff_ist': capture.get('evidence_cutoff_ist'),
         'bundle_frozen_at_ist': capture.get('bundle_frozen_at_ist'),
         'bundle_sha256': digest,
+        'bundle_status': bundle.get('status'),
         'spot': price.get('spot'),
         'latest_by_timeframe': price.get('latest_by_timeframe'),
         'future': futures.get('future'),
@@ -122,13 +138,16 @@ def run():
         'option_sample_strikes': strikes,
         'chart_alignment_excluding_5m': chart.get('directional_alignment_excluding_5m'),
         'chart_timeframes': tf_summary,
-        'screenshot_required': bundle.get('runtime_context', {}).get('screenshot_required'),
-        'forecast_release_enabled': bundle.get('runtime_context', {}).get('forecast_release_enabled'),
-        'production_5dr_write_enabled': bundle.get('runtime_context', {}).get('production_5dr_write_enabled'),
-        'lifecycle_write_enabled': bundle.get('runtime_context', {}).get('lifecycle_write_enabled'),
-        'trading_enabled': bundle.get('runtime_context', {}).get('trading_enabled'),
+        'screenshot_required': runtime.get('screenshot_required'),
+        'forecast_release_enabled': runtime.get('forecast_release_enabled'),
+        'production_5dr_write_enabled': runtime.get('production_5dr_write_enabled'),
+        'lifecycle_write_enabled': runtime.get('lifecycle_write_enabled'),
+        'trading_enabled': runtime.get('trading_enabled'),
     }
-    print(json.dumps(result, sort_keys=True, separators=(',', ':')))
+    encoded = json.dumps(result, sort_keys=True, separators=(',', ':'))
+    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SUMMARY_PATH.write_text(encoded + '\n', encoding='utf-8')
+    print(encoded)
     return result
 
 
