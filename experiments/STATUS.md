@@ -1,6 +1,6 @@
 # Experimental 5DR autonomous market-data status
 
-PR #30 remains experimental, draft and unmerged. The Drive canonical specification is 5DR V2.2.3, an operational automation amendment only. Production forecasting/scoring semantics remain frozen and no experimental code is connected to the canonical production consumer without explicit approval.
+PR #30 remains experimental, draft and unmerged. The Drive canonical specification remains 5DR V2.2.3. Production forecasting/scoring semantics remain frozen and no experimental code is connected to the canonical production consumer without explicit approval.
 
 ## Current gate summary
 
@@ -16,147 +16,137 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - G9 AUTONOMOUS WEB-CONTEXT INGESTION: PASS FOR GOVERNED LIVE EXECUTOR — live official/web source acquisition, bounded deterministic fact extraction, hashing, freshness and fail-closed reference-only handling proven.
 - G10 END-TO-END AUTONOMOUS 5DR SHADOW: PASS FOR NON-PUBLISHING LIVE SHADOW — frozen current structured evidence was bundle-bound to governed judgment and executed through the existing source-neutral engine with all side effects disabled.
 - G10-B MACRO-ENRICHED LIVE SHADOW: PASS_DIAGNOSTIC — governed official macro facts were incorporated without methodology change; diagnostic only, not production acceptance.
-- G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: ACTIVE under protocol v2. One comparable manual pair is counted on 17 Sep 2026. A second structured capture is preserved but has no verified screenshot-assisted mate within the pairing window and therefore does not count.
-- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending G11 review and explicit user approval.
+- G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: PRIMARY MANUAL SERIES COMPLETE — 3/3 same-session manual pairs PASS on 17 Sep 2026. Consolidated state: `MANUAL_SERIES_PASS_ROLLOVER_PENDING`.
+- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending final G11 rollover completion, screenshot-retirement readiness assessment, and explicit user approval.
 - G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
-- ROUTINE SCREENSHOT RETIREMENT: NOT ACTIVATED pending G11 evidence review.
+- ROUTINE SCREENSHOT RETIREMENT: NOT ACTIVATED pending next-session rollover and final G11 readiness assessment.
 
 ## G11 active validation protocol — v2
 
-`experiments/g11_validation_protocol.json` is authoritative for the active experiment-only G11 collection protocol.
+`experiments/g11_validation_protocol.json` remains the active experiment-only G11 collection protocol.
 
-- schema: `5dr-v2-2-3-g11-validation-protocol-v2`.
 - required manual paired observations: 3.
 - required distinct sessions for the primary series: 1.
 - all three primary manual runs must belong to the same live NSE session.
-- every run requires an explicit user-approved manual trigger and a distinct manual run id.
+- every primary run requires an explicit user-approved manual trigger and a distinct manual run id.
 - reference mode: `SCREENSHOT_ASSISTED`.
 - structured mode: `UPSTOX_STRUCTURED`.
-- same manual run / comparison-window identity is required.
 - exact same evidence timestamp is not required.
 - <=180 seconds evidence-time delta is preferred.
 - >180 and <=300 seconds remains comparable-with-tolerance and must preserve the measured delta.
 - >300 seconds is observational-only and cannot count.
-- after three distinct comparable manual runs in one session, status may become `REVIEW_READY` only.
-- `REVIEW_READY` is not PASS, screenshot-retirement approval, production activation, methodology change or merge approval.
-- after the primary three-run series, one lightweight next-session rollover validation remains required to verify new-session identity and prior-session stale-data rejection.
-- no numeric market-output discrepancy threshold or automatic acceptance rule is invented by this execution-layer experiment.
+- primary same-session manual series is now COMPLETE 3/3 PASS.
+- one separate lightweight next-session rollover validation remains required.
+- the rollover is not another screenshot-parity run unless an actual rollover anomaly requires diagnostic screenshots.
+- no production activation, forecast release, lifecycle write, trading execution, methodology change, screenshot retirement, or PR merge is authorized by the manual-series PASS alone.
 
-`experiments/shadow_validation.py` records DES5, Market Trust, Execution Edge, BULL/RANGE/BEAR probability deltas, directional-label agreement and tradeability-semantics agreement while forcing acceptance and production-activation decisions false.
-
-The historical `experiments/gate_records/G11_observational_temporal_mismatch_2026-09-16.json` remains retained for audit. That earlier pair was about 56.6 minutes apart and is NOT_COMPARABLE.
+The historical `experiments/gate_records/G11_observational_temporal_mismatch_2026-09-16.json` remains retained for audit and does not count toward the primary series.
 
 ### 17 Sep scheduled 09:45 structured capture — preserved, not counted
 
-The earlier scheduled structured capture `G11-20260917-0945` remains valid structured evidence but has no matching 09:45 screenshot-assisted reference and therefore cannot count as a G11 pair.
+The scheduled structured capture `G11-20260917-0945` remains valid structured evidence but had no matching screenshot-assisted reference and therefore is not part of the 3-run primary series.
 
 - evidence cutoff: 09:45:00 IST.
-- capture start: 09:45:00.000323 IST.
-- capture start lag: 0.000 seconds.
-- bundle freeze: 09:45:45.243133 IST.
-- bundle freeze lag: 45.243 seconds.
 - bundle SHA-256: `af79ffc940260053b388a7420d9f435e589baa6659ffc3f133f40d218604a04a`.
-- capture SHA-256: `b24e472725ef9ea3cde7305eb4a9d830485b15407348a09841c552fb5357181a`.
-- cache save succeeded.
 - no forecast release, canonical integration, production/lifecycle write or trading was enabled.
 
-### Manual Run 1 — counted comparable observation
+### Manual Run 1 — PASS
 
-Manual Run 1 `G11-20260917-104405` is the first counted comparable v2 observation.
+Gate record: `experiments/gate_records/G11_manual_run1_2026-09-17.json`.
 
-- session: 17 Sep 2026.
-- structured cutoff: 10:44:05.440624 IST.
-- bundle freeze: 10:44:51.945028 IST.
+- manual run id: `G11-20260917-104405`.
+- evidence cutoff: 10:44:05 IST.
 - bundle SHA-256: `6fe9de7c379feecd5bb759e6a7eedec328af08f0a8278ae1b66abc8e621f105e`.
-- screenshot-assisted evidence was captured around 10:42:53–10:43:41 IST and was within the protocol's preferred <=180-second pairing tolerance.
-- immutable cache restore/public-summary verification succeeded.
-- no production/lifecycle write, canonical integration or trading was enabled.
+- screenshot timing was within the preferred <=180-second pairing tolerance.
+- spot, futures construction, option-chain structure, all five chart timeframes and PVS interpretation reconciled without material divergence.
+- all production/trading/write safety flags remained false.
 
-This is one comparable observation only; it is not an overall G11 PASS decision.
+### Manual Run 2 — PASS
 
-### Manual Run 2 — structured side preserved, pair incomplete
+Gate record: `experiments/gate_records/G11_manual_run2_2026-09-17.json`.
 
-Manual Run 2 `G11-20260917-134141` was explicitly marked user-approved in `.g11/trigger.txt` and its structured workflow succeeded.
-
-- structured workflow run: `35198366973`.
-- structured cutoff / capture start: 13:41:41.840036 IST.
-- capture start lag: 0.000 seconds.
-- bundle freeze: 13:42:24.256125 IST.
-- bundle freeze lag: 42.416 seconds.
+- manual run id: `G11-20260917-134141`.
+- evidence cutoff: 13:41:41.840036 IST.
 - bundle SHA-256: `afe6d95ec65abbc3f5e3f53c1a084f84d693cbfb91b54bf214e013658573603a`.
-- capture SHA-256: `38c3b1af59666db58e9a439a53e52cd7fc19150f5c07f5089a9d4a53678c5eb0`.
-- cache save succeeded and cached-summary restoration succeeded.
-- no forecast release, canonical integration, production/lifecycle write or trading was enabled.
-- no verified screenshot-assisted Run 2 reference is available within the <=300-second pairing window.
+- screenshot evidence was supplied within the approved comparison window.
+- spot/listed-future evidence, 22 Sep option-chain LTP/IV/OI/OI-change patterns, all five chart timeframes and PVS interpretation reconciled without material divergence.
+- all production/trading/write safety flags remained false.
 
-Therefore Run 2 is retained as valid structured evidence but is NOT COUNTED as a paired G11 observation. No screenshot reference is fabricated or borrowed from another time window.
+### Manual Run 3 — PASS
 
-### Current G11 count
+Gate record: `experiments/gate_records/G11_manual_run3_2026-09-17.json`.
 
-- comparable paired manual observations counted: 1 / 3.
-- valid structured-only observations retained but not counted: scheduled 09:45 capture and Manual Run 2.
-- `REVIEW_READY`: NO.
-- screenshot retirement: NO.
-- production structured-data runtime activation: NO.
-- PR #30 merge approval: NO.
+- manual run id: `G11-20260917-141937`.
+- evidence cutoff: 14:19:37.618705 IST.
+- bundle SHA-256: `ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881`.
+- screenshot evidence remained within the <=300-second hard comparability cap, with the core pair inside the preferred <=180-second window.
+- spot, actual 29 Sep future, option-chain parity and all five chart timeframes reconciled without material PVS divergence.
+- all production/trading/write safety flags remained false.
 
-## G9 live governed web-context proof — 16 Sep 2026
+### Consolidated same-session manual series
 
-Run `35079212997`, job `104739176929`, completed successfully.
+Gate record: `experiments/gate_records/G11_manual_series_2026-09-17.json`.
 
-- live governed web-context executor returned `5DR_LIVE_WEB_CONTEXT_PASSED`.
-- Fed H.15 official source: FACT_EXTRACTED, including source-dated 10Y Treasury and effective fed-funds observations.
-- FOMC official calendar: FACT_EXTRACTED, including 15–16 Sep 2026 meeting and decision-day match.
-- RBI official source: FACT_EXTRACTED, including policy repo rate and source-dated displayed USD/INR.
-- ICE Dollar Index owner page: REFERENCE_ONLY where no approved numeric DXY extraction was available from the bounded page surface.
-- OFAC/geopolitical pages: REFERENCE_ONLY where no approved deterministic event interpretation was defined.
-- REFERENCE_ONLY is not treated as neutral/no-event evidence and cannot fabricate a score.
-- every governed item carries source URL, source-content SHA-256, research SHA-256 and retrieval timestamp.
-- `forecast_released=false`, `production_5dr_write_enabled=false`, `trading_enabled=false`.
+- Run 1: PASS.
+- Run 2: PASS.
+- Run 3: PASS.
+- comparable paired manual observations: 3 / 3.
+- timing comparability: PASS.
+- spot cross-source parity: PASS.
+- listed-futures / synthetic-future explanation: PASS.
+- option LTP / IV / OI reconciliation: PASS.
+- all five chart timeframes reconciled for each run: YES.
+- material PVS divergence detected: NO.
+- production side effects detected: NO.
+- consolidated state: `MANUAL_SERIES_PASS_ROLLOVER_PENDING`.
+- G11 final gate status: `PENDING_NEXT_SESSION_ROLLOVER`.
 
-## G10 live shadow proof — 16 Sep 2026
+These three immutable manual runs must not be reacquired or repeated.
 
-Gate record `experiments/gate_records/G10_live_bound_shadow_2026-09-16.json` records PASS for workflow run `35078188409`, job `104735888140`.
+## Only remaining G11 validation — next-session rollover
 
-- exact frozen evidence bundle SHA-256 was recomputed at handoff.
-- screenshot dependency was false.
-- governed judgment was bound to the exact bundle.
-- existing source-neutral 5DR engine executed without publishing, recommendation release, production/lifecycle writes or trading.
-- `methodology_changed=false`.
-- D+1 through D+5 release zones remained deliberate non-release shadow placeholders; this proves handoff/engine execution rather than a production forecast release.
+Perform one lightweight validation in the next live NSE session only. Validate:
 
-Gate record `experiments/gate_records/G10B_macro_enriched_shadow_2026-09-16.json` records `PASS_DIAGNOSTIC` for workflow run `35079827793`, job `104741049991`.
+1. new NSE session identity is recognized;
+2. current session date is bound correctly;
+3. stale prior-session market evidence is rejected;
+4. prior-session cache/bundle cannot be mistaken for current live evidence;
+5. option expiry identity is current and not stale;
+6. deterministic replay remains valid;
+7. evidence hash / fingerprint integrity remains valid;
+8. idempotency / duplicate handling remains fail-safe;
+9. `published=false`;
+10. `forecast_release_enabled=false`;
+11. `production_5dr_write_enabled=false`;
+12. `lifecycle_write_enabled=false`;
+13. `trading_execution_enabled=false`.
 
-- official macro facts materially changed the diagnostic shadow interpretation while retaining NO_TRADE.
-- this is evidence-quality progress, not a production methodology change and not a G11 parity verdict.
+If rollover PASS: consolidate G11 as complete, perform final screenshot-retirement readiness assessment, synchronize status/audit wording and the existing Drive canonical spec only if required, and stop before production activation or PR #30 merge for explicit user approval.
+
+If rollover FAIL: preserve fail-closed state, identify the exact session/date/expiry/staleness defect, and fix only the execution/data-validation layer. Do not alter canonical methodology, scoring, weights, probability engine, tradeability gates or governance.
 
 ## Current-head regression state
 
-Branch head immediately before this status reconciliation was `c05b78869869100b73dbe6eb7920945b05918c67` (`[g11-compare] summarize manual run 2 cached evidence`).
-
-CI run `35198481895`, job `105127257879`, SUCCESS:
-
-- 424 tests passed + 5 subtests passed.
-- no production activation is implied by CI success.
+Current experimental branch head before this documentation sync: `ce1ef468c84a75a524a439e2fd22a20eee825e2d` (`[g11] consolidate three same-session manual PASS runs`). CI run `35202612772` completed successfully. CI success does not imply production activation.
 
 ## Core market-data proof retained
 
-Open-market burst run `35054637198`, job `104662116005`: 09:45 / 10:00 / 10:15 / 10:30 all PASS and ADVANCED during `NORMAL_OPEN`.
+Open-market burst run `35054637198`: 09:45 / 10:00 / 10:15 / 10:30 all PASS and ADVANCED during `NORMAL_OPEN`.
 
-Broad quantitative run `35060738861`, job `104680311692`: PASS for NIFTY, India VIX, nearest NIFTY future, NIFTY 15m/30m/1h, FII/DII, OI/change-OI/PCR/max-pain, GIFT Nifty, S&P 500, Dow, US Tech 100, DAX, FTSE 100, Nikkei 225, Hang Seng, Brent, WTI and USD/INR. Provider latency remains explicit.
+Broad quantitative run `35060738861`: PASS for NIFTY, India VIX, nearest NIFTY future, NIFTY 15m/30m/1h, FII/DII, OI/change-OI/PCR/max-pain, GIFT Nifty, major global indices, Brent, WTI and USD/INR.
 
-Representative history run `35061881459`, job `104683799954`: PASS with exactly eight authenticated read-only GETs. Validated sample counts: NIFTY 5m 300; 15m 100; 30m 52; 1h 28; 1d 31; India VIX 1d 31; S&P 500 1d 32; Brent 1d 31.
+Representative history run `35061881459`: PASS with exactly eight authenticated read-only GETs.
 
-Live chart derivation run `35065714571`, job `104695407603`: PASS. Real NIFTY history processed at 5m/15m/30m/1h/1d and deterministic chart structure derived without assigning forecast direction or fabricating index volume/VWAP.
+Live chart derivation run `35065714571`: PASS across 5m/15m/30m/1h/1d without assigning forecast direction or fabricating index volume/VWAP.
 
 ## Durable-cache and cost boundary
 
 The bounded initial 5DR historical plan remains 29 series / 90 planned calls / 115,305-row upper bound under ceilings of 250 calls, 250,000 retained rows and zero planned billable units.
 
-- dry run `35062522905`: PASS, zero provider calls/writes.
-- one-chunk ephemeral smoke `35062661078`: PASS, one NIFTY 5m GET / 300 rows / no persistent write.
-- isolated Neon experimental branch `market-data-cache-v223-experiment`; canonical Neon `main` unchanged.
-- isolated schema `market_data_cache`; canonical lifecycle tables unchanged.
+- full historical backfill: NOT RUN.
+- isolated Neon branch: `market-data-cache-v223-experiment`.
+- isolated schema: `market_data_cache`.
+- canonical Neon `main`: unchanged by the experimental cache proof.
 - one real provenance-bound NIFTY smoke document persisted/read back successfully on the isolated branch.
 
 READY FOR BOUNDED FULL HISTORICAL BACKFILL INTO ISOLATED CACHE: TECHNICALLY YES; NOT YET RUN.
@@ -176,9 +166,8 @@ READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO.
 
 ## Current next gate
 
-1. Preserve the one counted 17 Sep Manual Run 1 observation and the non-counted structured-only captures without relabelling them.
-2. Any next counted manual pair must begin only after explicit user approval at the time of capture and the screenshot-assisted evidence must be captured immediately for the same manual run, within the v2 <=300-second maximum pairing window.
-3. The primary G11 series requires three comparable manual runs in one live NSE session. Do not combine observations from different sessions to reach 3/3.
-4. After a valid same-session 3/3 primary series is collected, perform the separate next-session rollover check. Only then produce `REVIEW_READY` for governed user review; do not auto-pass, retire screenshots, activate production or merge PR #30.
-5. The full 29-series / 90-call historical backfill remains optional and disabled unless separately justified/approved for the isolated cache. It must never target canonical Neon `main` without explicit approval.
-6. Final production run windows, persistent runtime activation, canonical integration and merge remain explicit later approval gates.
+1. Do not trigger or reacquire G11 Manual Runs 1, 2 or 3; the same-session 3/3 primary series is complete.
+2. Perform exactly one lightweight next-session rollover validation.
+3. Only after rollover PASS, produce final G11 consolidation and screenshot-retirement readiness assessment.
+4. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
+5. The full 29-series / 90-call historical backfill remains optional and disabled unless separately justified/approved for the isolated cache; it must never target canonical Neon `main` without explicit approval.
