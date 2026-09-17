@@ -1,0 +1,49 @@
+name: G11 cached comparison summary
+
+on:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - '.g11/compare_trigger.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g11-cached-summary-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Read requested G11 cache identity
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=$(grep '^manual_run_id=' .g11/compare_trigger.txt | cut -d= -f2-)
+          bundle_sha=$(grep '^bundle_sha256=' .g11/compare_trigger.txt | cut -d= -f2-)
+          test -n "$run_id"
+          test -n "$bundle_sha"
+          echo "manual_run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha256=$bundle_sha" >> "$GITHUB_OUTPUT"
+      - name: Restore exact frozen G11 cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .shadow/g11_capture
+          key: 5dr-g11-manual-${{ steps.meta.outputs.manual_run_id }}-${{ steps.meta.outputs.bundle_sha256 }}
+          fail-on-cache-miss: true
+      - name: Emit bounded public comparison summary
+        env:
+          EXPECTED_MANUAL_RUN_ID: ${{ steps.meta.outputs.manual_run_id }}
+          EXPECTED_BUNDLE_SHA: ${{ steps.meta.outputs.bundle_sha256 }}
+        run: python -m experiments.run_g11_cached_public_summary
