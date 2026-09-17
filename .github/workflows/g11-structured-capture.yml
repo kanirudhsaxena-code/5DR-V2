@@ -1,4 +1,4 @@
-name: G11 structured same-cutoff evidence capture
+name: G11 manual structured evidence capture
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: g11-structured-capture-${{ github.ref }}
+  group: g11-manual-capture-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -26,19 +26,19 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11'
-      - name: G11 capture and pairing boundary tests
+      - name: G11 manual capture and pairing boundary tests
         run: |
           python -m unittest tests.test_experimental_upstox_g11_live_capture -v
           python -m unittest tests.test_experimental_upstox_shadow_pairing -v
           python -m unittest tests.test_experimental_upstox_shadow_validation -v
-      - name: Freeze exact-cutoff structured evidence
+      - name: Freeze user-approved manual structured evidence
         id: g11_capture
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.run_g11_structured_capture
-      - name: Save exact frozen G11 structured capture
+      - name: Save exact frozen G11 manual capture
         if: steps.g11_capture.outcome == 'success'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: .shadow/g11_capture
-          key: 5dr-g11-structured-${{ steps.g11_capture.outputs.pair_id }}-${{ steps.g11_capture.outputs.bundle_sha256 }}
+          key: 5dr-g11-manual-${{ steps.g11_capture.outputs.pair_id }}-${{ steps.g11_capture.outputs.bundle_sha256 }}
