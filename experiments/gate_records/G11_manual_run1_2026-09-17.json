@@ -1,0 +1,68 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G11_MANUAL_PAIRED_VALIDATION_RUN_1",
+  "status": "PASS",
+  "date": "2026-09-17",
+  "manual_run_id": "G11-20260917-104405",
+  "comparison_workflow_run_id": 35186450548,
+  "evidence_cutoff_ist": "2026-09-17T10:44:05+05:30",
+  "bundle_frozen_at_ist": "2026-09-17T10:44:51+05:30",
+  "bundle_sha256": "6fe9de7c379feecd5bb759e6a7eedec328af08f0a8278ae1b66abc8e621f105e",
+  "cache_key": "5dr-g11-manual-G11-20260917-104405-6fe9de7c379feecd5bb759e6a7eedec328af08f0a8278ae1b66abc8e621f105e",
+  "screenshot_window_ist": {
+    "earliest": "2026-09-17T10:42:52+05:30",
+    "latest": "2026-09-17T10:43:41+05:30",
+    "preferred_window_le_3m": true,
+    "hard_cap_le_5m": true
+  },
+  "spot_reconciliation": {
+    "sensibull_spot": 23267.9,
+    "upstox_spot": 23270.95,
+    "difference_points": 3.05,
+    "difference_pct": 0.0131,
+    "material": false
+  },
+  "futures_reconciliation": {
+    "sensibull_22_sep_synthetic_future": 23284.8,
+    "upstox_exchange_future": 23307.5,
+    "difference_points": 22.7,
+    "exact_equality_required": false,
+    "material": false,
+    "explanation": "Sensibull synthetic future is option-implied for the selected expiry while Upstox value is the exchange-traded future; both showed positive carry."
+  },
+  "option_chain": {
+    "expiry": "2026-09-22",
+    "strikes_compared": [23200, 23250, 23300, 23350],
+    "ltp_pattern": "CLOSE_MATCH",
+    "absolute_oi_pattern": "CLOSE_MATCH",
+    "oi_change_pattern": "SAME_POSITIONING_AND_BUILDUP_DIRECTION",
+    "iv_pattern": "CONSISTENT_PROVIDER_SPECIFIC_REPRESENTATION",
+    "material_divergence": false
+  },
+  "chart_reconciliation": {
+    "5m": {"screenshot_close": 23266.15, "structured_close": 23267.9, "assessment": "MATCH_SHORT_TERM_RECOVERY_STRUCTURE"},
+    "15m": {"screenshot_close": 23270.85, "structured_close": 23267.9, "assessment": "MATCH_TRANSITIONAL_RECOVERY_WITHIN_WEAKER_CONTEXT"},
+    "30m": {"screenshot_close": 23271.5, "structured_close": 23270.1, "assessment": "MATCH_BROADER_WEAKNESS_WITH_LOCAL_STABILISATION"},
+    "1h": {"screenshot_close": 23268.25, "structured_close": 23270.1, "assessment": "MATCH_BROADER_DECLINE_WITH_SHORT_TERM_BASE"},
+    "1d": {"screenshot_live_close": 23268.85, "structured_last_completed_close": 23217.6, "structured_trend": "DOWNTREND_STRUCTURE_LH_LL", "assessment": "MATCH_HIGHER_TIMEFRAME_DOWNTREND"},
+    "structured_alignment_excluding_5m": "ALIGNED_DOWN",
+    "material_pvs_divergence": false
+  },
+  "mismatch_explanations": [
+    "approximately 24 to 72 seconds screenshot-versus-structured timing difference",
+    "provider refresh cadence",
+    "rounding and live intrabar movement",
+    "provider-specific IV and OI representation",
+    "synthetic future versus exchange-traded future construction",
+    "daily live candle versus last completed daily candle"
+  ],
+  "isolation": {
+    "forecast_released": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_merge_performed": false
+  },
+  "conclusion": "PASS: discrepancies are explainable and do not materially alter 5DR evidence or PVS interpretation."
+}
