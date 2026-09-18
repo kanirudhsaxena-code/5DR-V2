@@ -18,7 +18,7 @@ from experiments.upstox_transport import CurlOpener
 from phase1.upstox import BASE, PipelineError
 
 MAX_RESPONSE_BYTES = 8_000_000
-FORBIDDEN_FRAGMENTS = ("/order", "/portfolio", "/fund", "/user", "/payment", "/gtt")
+FORBIDDEN_FRAGMENTS = ("/order", "/portfolio", "/funds", "/user/", "/payment", "/gtt")
 
 FUNDAMENTAL_PATHS = {
     "profile": "/v2/fundamentals/{isin}/profile",
