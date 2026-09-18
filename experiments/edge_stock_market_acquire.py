@@ -13,6 +13,7 @@ from experiments.edge_stock_bundle import build_edge_stock_bundle
 from experiments.edge_stock_identity import resolve_nse_equity, resolve_stock_fo_identity
 from experiments.edge_stock_upstox import EdgeStockReadOnlyClient
 from experiments.upstox_catalog import PublicInstrumentCatalog
+from experiments.upstox_history_policy import plan_history_chunks
 
 
 def _sha(*values):
@@ -85,6 +86,27 @@ def _candle_rows(envelope):
     if not isinstance(rows, list) or not rows:
         raise DataArchitectureError("EDGE_STOCK candle data missing")
     return rows
+
+
+def _merge_historical_chunks(client, instrument_key, unit, interval, start, end):
+    rows_by_stamp = {}
+    source_digests = []
+    for chunk in plan_history_chunks(start, end, unit, interval):
+        env = client.historical(
+            instrument_key,
+            unit,
+            interval,
+            chunk["start"],
+            chunk["end"],
+        )
+        source_digests.append(env["sha256"])
+        for row in _candle_rows(env):
+            stamp = _stamp(row[0]).isoformat()
+            rows_by_stamp[stamp] = row
+    rows = [rows_by_stamp[key] for key in sorted(rows_by_stamp)]
+    if not rows:
+        raise DataArchitectureError("EDGE_STOCK historical series empty")
+    return rows, source_digests
 
 
 def derive_relative_strength(stock_daily_rows, benchmark_daily_rows):
@@ -205,18 +227,34 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
     series = {}
     series_sources = []
     for timeframe, (unit, interval, lookback) in history_cfg.items():
-        env = client.historical(
-            stock["instrument_key"], unit, interval,
-            today - timedelta(days=lookback - 1), today,
+        history_end = today if timeframe == "1d" else today - timedelta(days=1)
+        rows, digests = _merge_historical_chunks(
+            client,
+            stock["instrument_key"],
+            unit,
+            interval,
+            today - timedelta(days=lookback - 1),
+            history_end,
         )
-        series[timeframe] = _candle_rows(env)
-        series_sources.append(env["sha256"])
+        if timeframe != "1d":
+            intraday = client.intraday(stock["instrument_key"], unit, interval)
+            digests.append(intraday["sha256"])
+            merged = {_stamp(row[0]).isoformat(): row for row in rows}
+            for row in _candle_rows(intraday):
+                merged[_stamp(row[0]).isoformat()] = row
+            rows = [merged[key] for key in sorted(merged)]
+        series[timeframe] = rows
+        series_sources.extend(digests)
 
-    benchmark_env = client.historical(
-        benchmark_key, "days", 1,
-        today - timedelta(days=179), today,
+    benchmark_rows, benchmark_sources = _merge_historical_chunks(
+        client,
+        benchmark_key,
+        "days",
+        1,
+        today - timedelta(days=179),
+        today,
     )
-    relative = derive_relative_strength(series["1d"], _candle_rows(benchmark_env))
+    relative = derive_relative_strength(series["1d"], benchmark_rows)
 
     fundamentals = {}
     fundamental_sources = []
@@ -255,7 +293,7 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
             provider_timestamp=as_of,
             acquisition_timestamp=as_of,
             source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_RELATIVE_STRENGTH",
-            source_sha256=_sha(series_sources[-1], benchmark_env["sha256"]),
+            source_sha256=_sha(*series_sources, *benchmark_sources),
         ),
         _record(
             stock, "STOCK_FUNDAMENTALS",
