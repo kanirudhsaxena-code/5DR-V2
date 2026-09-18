@@ -73,8 +73,8 @@ CORE_VARS = {
 
 
 class EdgeStockOrchestratorTests(unittest.TestCase):
-    def research(self):
-        return [
+    def research(self, include_peer_fallback=False):
+        rows = [
             build_research_record(
                 stock_identity=STOCK,
                 variable_id="STOCK_FORWARD_CATALYSTS",
@@ -97,6 +97,18 @@ class EdgeStockOrchestratorTests(unittest.TestCase):
                 acquisition_timestamp=NOW,
             ),
         ]
+        if include_peer_fallback:
+            rows.append(build_research_record(
+                stock_identity=STOCK,
+                variable_id="STOCK_PEERS",
+                sources=[
+                    source("COMPANY_IR", 5),
+                    source("REPUTABLE_SECONDARY", 6),
+                ],
+                status="RECOVERED_VIA_FALLBACK",
+                acquisition_timestamp=NOW,
+            ))
+        return rows
 
     def test_complete_non_fo_orchestration_is_ready(self):
         core = {
@@ -172,6 +184,84 @@ class EdgeStockOrchestratorTests(unittest.TestCase):
                 research_records=self.research()[:2],
                 macro_record=macro,
                 run_id="EDGE-STOCK-LTF-TEST2",
+                frozen_at=NOW,
+            )
+
+    def test_peer_provider_gap_recovers_only_with_explicit_fallback(self):
+        core = {
+            "stock_identity": STOCK,
+            "fo_identity": FO,
+            "records": [core_record(v) for v in sorted(CORE_VARS - {"STOCK_PEERS"})],
+            "provider_gaps": [{
+                "variable_id": "STOCK_PEERS",
+                "provider": "UPSTOX",
+                "provider_lane": "competitors",
+                "status": "PROVIDER_UNAVAILABLE",
+                "fallback_required": True,
+            }],
+            "read_only": True,
+            "methodology_applied": False,
+        }
+        macro = build_shared_macro_record(
+            stock_identity=STOCK,
+            macro_evidence={
+                "source_sha256": digest("macro-peer"),
+                "source_reference": "shared-market-core:test",
+                "observed_at": NOW,
+                "values": {},
+            },
+            acquisition_timestamp=NOW,
+        )
+        with self.assertRaises(DataArchitectureError):
+            assemble_edge_stock_bundle(
+                core_acquisition=core,
+                research_records=self.research(),
+                macro_record=macro,
+                run_id="EDGE-STOCK-LTF-PEER-BLOCK",
+                frozen_at=NOW,
+            )
+        out = assemble_edge_stock_bundle(
+            core_acquisition=core,
+            research_records=self.research(include_peer_fallback=True),
+            macro_record=macro,
+            run_id="EDGE-STOCK-LTF-PEER-RECOVERED",
+            frozen_at=NOW,
+        )
+        self.assertEqual(out["status"], "READY")
+        peer = [
+            r for r in out["bundle"]["quantitative_records"]
+            if r["variable_id"] == "STOCK_PEERS"
+        ]
+        self.assertEqual(
+            peer[0]["values"]["reconciliation_status"],
+            "RECOVERED_VIA_FALLBACK",
+        )
+
+    def test_peer_fallback_cannot_duplicate_provider_peer_record(self):
+        core = {
+            "stock_identity": STOCK,
+            "fo_identity": FO,
+            "records": [core_record(v) for v in sorted(CORE_VARS)],
+            "provider_gaps": [],
+            "read_only": True,
+            "methodology_applied": False,
+        }
+        macro = build_shared_macro_record(
+            stock_identity=STOCK,
+            macro_evidence={
+                "source_sha256": digest("macro-dupe"),
+                "source_reference": "shared-market-core:test",
+                "observed_at": NOW,
+                "values": {},
+            },
+            acquisition_timestamp=NOW,
+        )
+        with self.assertRaises(DataArchitectureError):
+            assemble_edge_stock_bundle(
+                core_acquisition=core,
+                research_records=self.research(include_peer_fallback=True),
+                macro_record=macro,
+                run_id="EDGE-STOCK-LTF-PEER-DUPE",
                 frozen_at=NOW,
             )
 

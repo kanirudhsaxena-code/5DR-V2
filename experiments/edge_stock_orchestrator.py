@@ -9,11 +9,13 @@ from datetime import datetime
 from experiments.data_contract import DataArchitectureError, build_record
 from experiments.edge_stock_bundle import build_edge_stock_bundle, verify_edge_stock_bundle
 
-RESEARCH_VARIABLES = {
+REQUIRED_RESEARCH_VARIABLES = {
     "STOCK_FORWARD_CATALYSTS",
     "STOCK_GOVERNANCE_RISK",
     "STOCK_INSTITUTIONAL_EVENTS",
 }
+FALLBACK_RESEARCH_VARIABLES = {"STOCK_PEERS"}
+ALLOWED_RESEARCH_VARIABLES = REQUIRED_RESEARCH_VARIABLES | FALLBACK_RESEARCH_VARIABLES
 
 
 def build_shared_macro_record(*, stock_identity, macro_evidence, acquisition_timestamp):
@@ -75,7 +77,7 @@ def assemble_edge_stock_bundle(*, core_acquisition, research_records,
         if not isinstance(record, dict):
             raise DataArchitectureError("EDGE_STOCK research record invalid")
         variable_id = record.get("variable_id")
-        if variable_id not in RESEARCH_VARIABLES:
+        if variable_id not in ALLOWED_RESEARCH_VARIABLES:
             raise DataArchitectureError("unexpected EDGE_STOCK research variable")
         if variable_id in research_by_variable:
             raise DataArchitectureError("duplicate EDGE_STOCK research variable")
@@ -84,7 +86,7 @@ def assemble_edge_stock_bundle(*, core_acquisition, research_records,
         if record.get("subject", {}).get("id") != stock.get("id"):
             raise DataArchitectureError("cross-stock research contamination")
         research_by_variable[variable_id] = record
-    missing_research = sorted(RESEARCH_VARIABLES - set(research_by_variable))
+    missing_research = sorted(REQUIRED_RESEARCH_VARIABLES - set(research_by_variable))
     if missing_research:
         raise DataArchitectureError(f"EDGE_STOCK research variables missing: {missing_research}")
 
@@ -95,7 +97,32 @@ def assemble_edge_stock_bundle(*, core_acquisition, research_records,
     if macro_record.get("subject", {}).get("id") != stock.get("id"):
         raise DataArchitectureError("EDGE_STOCK macro subject invalid")
 
-    all_records = list(records) + list(research_records) + [macro_record]
+    core_variables = {record.get("variable_id") for record in records if isinstance(record, dict)}
+    provider_gaps = {
+        row.get("variable_id")
+        for row in core_acquisition.get("provider_gaps", [])
+        if isinstance(row, dict) and row.get("fallback_required") is True
+    }
+    fallback_records = []
+    for variable_id in FALLBACK_RESEARCH_VARIABLES:
+        fallback = research_by_variable.get(variable_id)
+        if variable_id in core_variables:
+            if fallback is not None:
+                raise DataArchitectureError("unnecessary EDGE_STOCK fallback duplicates provider evidence")
+            continue
+        if variable_id not in provider_gaps:
+            raise DataArchitectureError("EDGE_STOCK missing variable lacks explicit provider gap")
+        if fallback is None:
+            raise DataArchitectureError(f"EDGE_STOCK fallback evidence missing: {variable_id}")
+        if fallback.get("values", {}).get("reconciliation_status") != "RECOVERED_VIA_FALLBACK":
+            raise DataArchitectureError("EDGE_STOCK fallback status invalid")
+        fallback_records.append(fallback)
+
+    required_research_records = [
+        research_by_variable[variable_id]
+        for variable_id in sorted(REQUIRED_RESEARCH_VARIABLES)
+    ]
+    all_records = list(records) + required_research_records + fallback_records + [macro_record]
     bundle = build_edge_stock_bundle(
         stock_identity=stock,
         fo_identity=fo,
