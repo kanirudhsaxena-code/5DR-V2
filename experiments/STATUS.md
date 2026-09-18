@@ -17,7 +17,7 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - G10 END-TO-END AUTONOMOUS 5DR SHADOW: PASS FOR NON-PUBLISHING LIVE SHADOW — frozen current structured evidence was bundle-bound to governed judgment and executed through the existing source-neutral engine with all side effects disabled.
 - G10-B MACRO-ENRICHED LIVE SHADOW: PASS_DIAGNOSTIC — governed official macro facts were incorporated without methodology change; diagnostic only, not production acceptance.
 - G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: PASS — 3/3 same-session manual pairs PASS on 17 Sep 2026 and next-session rollover PASS on 18 Sep 2026. Final gate: `experiments/gate_records/G11_final_2026-09-18.json`.
-- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending post-G11 isolated backfill/persistence/scheduler readiness audit and explicit user approval.
+- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: PREPRODUCTION READINESS PASS / ACTIVATION BLOCKED — bounded backfill dry-run, isolated persistence reconciliation and scheduler/watchdog audit passed; explicit user approval is still required before activation.
 - G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
 - ROUTINE SCREENSHOT RETIREMENT READINESS: PASS — normal autonomous validation is screenshot-free ready; diagnostic screenshots remain an anomaly fallback. Production activation remains unapproved.
 
@@ -154,8 +154,10 @@ The bounded initial 5DR historical plan remains 29 series / 90 planned calls / 1
 - canonical Neon `main`: unchanged by the experimental cache proof.
 - one real provenance-bound NIFTY smoke document persisted/read back successfully on the isolated branch.
 
+POST-G11 BOUNDED BACKFILL READINESS: PASS — 29 series / 90 planned calls / 115,305-row upper bound; dry run executed 0 network calls and 0 storage writes on 18 Sep 2026.
+ISOLATED CACHE PERSISTENCE RECONCILIATION: PASS — existing smoke document integrity verified on `market-data-cache-v223-experiment`; canonical `main` has no market-data-cache table.
 READY FOR BOUNDED FULL HISTORICAL BACKFILL INTO ISOLATED CACHE: TECHNICALLY YES; NOT YET RUN.
-READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO.
+READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO — explicit user approval required.
 
 ## Security and isolation
 
@@ -172,7 +174,7 @@ READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO.
 ## Current next gate
 
 1. G11 is complete; do not reacquire or repeat Manual Runs 1–3 or the 18 Sep rollover.
-2. Complete post-G11 isolated historical-cache/backfill readiness and persistence reconciliation without touching canonical Neon `main`.
-3. Complete scheduler/watchdog production-readiness audit with production triggers still disabled.
-4. Complete final GitHub + Drive audit and prepare the production-activation approval pack.
+2. Post-G11 bounded backfill readiness, isolated persistence reconciliation and scheduler/watchdog readiness are complete and PASS.
+3. Complete final GitHub + Drive audit and prepare the production-activation approval pack.
+4. Full 29-series historical backfill has NOT been run; it remains separately approval-gated if desired before/after activation.
 5. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
