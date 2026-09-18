@@ -1,0 +1,40 @@
+name: EDGE Stocks Full Acceptance
+on:
+  pull_request:
+    paths:
+      - 'runtime/edge_stock_full_acceptance_trigger.txt'
+      - 'experiments/edge_stock_full_acceptance_manifest.py'
+      - 'experiments/run_edge_stock_full_acceptance.py'
+      - '.github/workflows/edge-stock-full-acceptance.yml'
+permissions:
+  contents: read
+concurrency:
+  group: edge-stock-full-acceptance
+  cancel-in-progress: false
+jobs:
+  accept:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: EDGE Stocks regression boundary
+        run: |
+          python -m unittest tests.test_edge_stock_consumer -v
+          python -m unittest tests.test_edge_stock_upstox -v
+          python -m unittest tests.test_edge_stock_market_acquire -v
+          python -m unittest tests.test_edge_stock_orchestrator -v
+      - name: Run full representative acceptance
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_edge_stock_full_acceptance
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: edge-stock-full-acceptance-${{ github.run_id }}
+          path: .edge_stock/full_acceptance
+          if-no-files-found: error
+          retention-days: 30
