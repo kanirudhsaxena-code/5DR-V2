@@ -1,0 +1,50 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "POST_G11_HISTORICAL_EXPORT_ATTEMPT",
+  "status": "BLOCKED_FAIL_CLOSED_RETRY_REQUIRES_EXPLICIT_APPROVAL",
+  "date": "2026-09-18",
+  "workflow": {
+    "run_id": 35307657977,
+    "name": "29-series historical cache export",
+    "trigger_commit": "40f9c1415480b8f1992ca765d20489c22cd7d809",
+    "conclusion": "FAILURE",
+    "safety_tests": "PASS",
+    "failed_step": "Export approved 29-series cache documents",
+    "artifact_upload": "SKIPPED"
+  },
+  "failure": {
+    "classification": "PROVIDER_CANDLE_DATA_VALIDATION",
+    "message": "Invalid OHLC geometry",
+    "exact_series_and_chunk_not_available_from_failed_run": true,
+    "at_least_one_provider_response_reached_candle_validation": true,
+    "provider_calls_before_failure": "NOT_AUDITABLY_COUNTED"
+  },
+  "persistence": {
+    "github_artifact_uploaded": false,
+    "durable_cache_write_performed": false,
+    "neon_write_performed": false,
+    "canonical_main_write_performed": false
+  },
+  "governance": {
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "forecast_release_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "pr30_merge_performed": false,
+    "production_activation_performed": false,
+    "automatic_retry_authorized": false,
+    "explicit_user_approval_required_before_retry": true
+  },
+  "remediation": {
+    "offline_diagnostic_hardening_commits": [
+      "bb673b76c0d2a62e862dd44e59a7202ba6d3613a",
+      "9ea76be1309632de0fec5a2a8cc77dc353668aa6",
+      "fe2aa327d032a5b06ab3a7b116227c9d7c1ea73c",
+      "6a90211596dad402e06042cf10d75fce7d7567d8"
+    ],
+    "effect": "Future approved retry will bind provider candle validation errors to candle row index plus exact 5DR series and history chunk.",
+    "network_retry_performed": false
+  },
+  "next": "WAIT_FOR_EXPLICIT_USER_APPROVAL_BEFORE_ANY_HISTORICAL_EXPORT_RETRY_OR_PRODUCTION_ACTIVATION"
+}
