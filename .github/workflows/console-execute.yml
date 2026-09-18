@@ -110,23 +110,31 @@ jobs:
         continue-on-error: true
         env:
           CONSOLE_URL: ${{ inputs.console_url }}
+          STABLE_CONSOLE_URL: https://sole.k-anirudhsaxena.workers.dev
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          ENDPOINT="$CONSOLE_URL/api/5dr/runs"
-          if ! curl --location --fail-with-body --silent --show-error \
-            -X POST \
-            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -H "Content-Type: application/json" \
-            --data-binary @envelope.json \
-            "$ENDPOINT"; then
-            echo "Authenticated preview publish failed; retrying public preview path."
+          publish_result() {
+            BASE="$1"
+            ENDPOINT="$BASE/api/5dr/runs"
+            if curl --location --fail-with-body --silent --show-error \
+              -X POST \
+              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              --data-binary @envelope.json \
+              "$ENDPOINT"; then
+              return 0
+            fi
             curl --location --fail-with-body --silent --show-error \
               -X POST \
               -H "Content-Type: application/json" \
               --data-binary @envelope.json \
               "$ENDPOINT"
+          }
+          if ! publish_result "$CONSOLE_URL"; then
+            echo "Requested Console callback failed; retrying stable Console host."
+            publish_result "$STABLE_CONSOLE_URL"
           fi
 
       - name: Mark Console request failed
