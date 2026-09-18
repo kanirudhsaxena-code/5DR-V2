@@ -2,6 +2,11 @@ name: 5DR V2.2.3 Structured Evidence Production
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'runtime/production_evidence_trigger.txt'
   schedule:
     # 10:30 IST late-morning intraday snapshot.
     - cron: '0 5 * * 1-5'
