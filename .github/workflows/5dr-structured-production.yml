@@ -1,0 +1,64 @@
+name: 5DR V2.2.3 Structured Evidence Production
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 10:30 IST late-morning intraday snapshot.
+    - cron: '0 5 * * 1-5'
+    # 15:25 IST prior-close canonical-candidate refresh.
+    - cron: '55 9 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 5dr-v223-structured-evidence-production
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+
+      - name: Verify production evidence safety boundary
+        run: |
+          python -m unittest tests.test_experimental_production_evidence -v
+          python -m unittest tests.test_experimental_upstox_session -v
+          python -m unittest tests.test_experimental_upstox_evidence_bundle -v
+          python -m unittest tests.test_experimental_upstox_engine_handoff -v
+
+      - name: Acquire frozen structured evidence
+        id: evidence
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_production_evidence
+
+      - name: Emit governed judgment summary for the intelligence layer
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('.production/evidence/judgment_summary.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          print('BEGIN_5DR_PRODUCTION_JUDGMENT_SUMMARY')
+          print(json.dumps(payload, sort_keys=True, separators=(',', ':')))
+          print('END_5DR_PRODUCTION_JUDGMENT_SUMMARY')
+          PY
+
+      - name: Upload immutable production evidence artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 5dr-production-evidence-${{ steps.evidence.outputs.session_date_ist }}-${{ steps.evidence.outputs.label }}-${{ steps.evidence.outputs.bundle_sha256 }}
+          path: .production/evidence
+          if-no-files-found: error
+          retention-days: 30
