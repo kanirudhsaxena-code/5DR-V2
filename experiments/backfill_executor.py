@@ -7,12 +7,15 @@ No canonical 5DR lifecycle or trading surface is referenced here.
 import hashlib
 import json
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from experiments.backfill_inventory import SERIES, series_id, validate_inventory
 from experiments.data_contract import DataArchitectureError
 from experiments.upstox_history_policy import TIMEFRAME_MAP, plan_history_chunks
 from experiments.usage_ledger import UsageBudget, UsageLedger
 from phase1.upstox import PipelineError
+
+IST = ZoneInfo("Asia/Kolkata")
 
 MAX_BARS_PER_CALENDAR_DAY = {
     "NSE_INDEX": {"5m": 75, "15m": 25, "30m": 13, "1h": 7, "1d": 1},
@@ -27,6 +30,11 @@ def _date(value, field):
         return value
     if isinstance(value, str):
         try:
+            if "T" in value:
+                parsed = datetime.fromisoformat(value)
+                if parsed.tzinfo is None:
+                    raise ValueError
+                return parsed.astimezone(IST).date()
             return date.fromisoformat(value[:10])
         except ValueError:
             raise DataArchitectureError(f"{field} invalid") from None
