@@ -47,14 +47,20 @@ def _validate_candle_envelope(envelope):
     if not isinstance(rows, list) or not rows:
         raise PipelineError("Candle array missing")
     seen = set()
-    for row in rows:
+    for index, row in enumerate(rows):
         if not isinstance(row, list) or len(row) != 7:
-            raise PipelineError("Candle schema mismatch")
-        stamp = datetime.fromisoformat(row[0])
+            raise PipelineError(f"Candle schema mismatch at index {index}")
+        try:
+            stamp = datetime.fromisoformat(row[0])
+        except (TypeError, ValueError):
+            raise PipelineError(f"Candle timestamp invalid at index {index}") from None
         if stamp.tzinfo is None or stamp in seen:
-            raise PipelineError("Naive or duplicate candle timestamp")
+            raise PipelineError(f"Naive or duplicate candle timestamp at index {index}")
         seen.add(stamp)
-        validate_ohlc(row[1], row[2], row[3], row[4], volume=row[5], open_interest=row[6])
+        try:
+            validate_ohlc(row[1], row[2], row[3], row[4], volume=row[5], open_interest=row[6])
+        except PipelineError as error:
+            raise PipelineError(f"Candle validation failed at index {index}: {error}") from None
     envelope["validated_candles"] = len(rows)
     return envelope
 
