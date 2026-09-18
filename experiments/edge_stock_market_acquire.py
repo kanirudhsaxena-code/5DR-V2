@@ -14,6 +14,7 @@ from experiments.edge_stock_identity import resolve_nse_equity, resolve_stock_fo
 from experiments.edge_stock_upstox import EdgeStockReadOnlyClient
 from experiments.upstox_catalog import PublicInstrumentCatalog
 from experiments.upstox_history_policy import plan_history_chunks
+from phase1.upstox import PipelineError
 
 
 def _sha(*values):
@@ -256,8 +257,24 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
     )
     relative = derive_relative_strength(series["1d"], benchmark_rows)
 
+    provider_gaps = []
+
+    def optional_call(variable_id, name, fn):
+        try:
+            return fn()
+        except PipelineError:
+            provider_gaps.append({
+                "variable_id": variable_id,
+                "provider": "UPSTOX",
+                "provider_lane": name,
+                "status": "PROVIDER_UNAVAILABLE",
+                "fallback_required": True,
+            })
+            return None
+
     fundamentals = {}
     fundamental_sources = []
+    fundamental_failed = False
     for name, params in (
         ("profile", {}),
         ("income_statement", {"type": "consolidated", "time_period": "quarterly", "fs": True}),
@@ -265,14 +282,35 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
         ("cash_flow", {"type": "consolidated", "fs": True}),
         ("key_ratios", {}),
     ):
-        env = client.fundamental(name, stock["isin"], **params)
+        env = optional_call(
+            "STOCK_FUNDAMENTALS",
+            name,
+            lambda n=name, p=params: client.fundamental(n, stock["isin"], **p),
+        )
+        if env is None:
+            fundamental_failed = True
+            continue
         fundamentals[name] = env["payload"]["data"]
         fundamental_sources.append(env["sha256"])
 
-    share = client.fundamental("share_holdings", stock["isin"])
-    peers = client.fundamental("competitors", stock["isin"])
-    corp = client.fundamental("corporate_actions", stock["isin"])
-    news = client.news(stock["instrument_key"])
+    share = optional_call(
+        "STOCK_SHAREHOLDING", "share_holdings",
+        lambda: client.fundamental("share_holdings", stock["isin"]),
+    )
+    peers = optional_call(
+        "STOCK_PEERS", "competitors",
+        lambda: client.fundamental("competitors", stock["isin"]),
+    )
+    corp = optional_call(
+        "STOCK_CORPORATE_ACTIONS", "corporate_actions",
+        lambda: client.fundamental("corporate_actions", stock["isin"]),
+    )
+    news = optional_call(
+        "STOCK_NEWS_RECENT", "news",
+        lambda: client.news(stock["instrument_key"]),
+    )
+
+    record_at = datetime.now(timezone.utc)
 
     records = [
         _record(
@@ -281,7 +319,7 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
             values={"quote": stock_quote, "series": series},
             timeframe="MULTI",
             provider_timestamp=stock_quote["timestamp"],
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_PRICE",
             source_sha256=_sha(quote_env["sha256"], *series_sources),
         ),
@@ -290,104 +328,131 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
             metric="stock_vs_benchmark_daily_return",
             values={"benchmark": benchmark_identity, **relative},
             timeframe="1d",
-            provider_timestamp=as_of,
-            acquisition_timestamp=as_of,
+            provider_timestamp=None,
+            acquisition_timestamp=record_at,
+            freshness_status="HISTORICAL",
             source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_RELATIVE_STRENGTH",
             source_sha256=_sha(*series_sources, *benchmark_sources),
         ),
-        _record(
+    ]
+
+    if not fundamental_failed and len(fundamentals) == 5:
+        records.append(_record(
             stock, "STOCK_FUNDAMENTALS",
             metric="profile_financial_statements_and_key_ratios",
             values=fundamentals,
             timeframe="fundamental",
             provider_timestamp=None,
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             freshness_status="HISTORICAL",
             source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_FUNDAMENTALS",
             source_sha256=_sha(*fundamental_sources),
-        ),
-        _record(
+        ))
+    elif not any(g["variable_id"] == "STOCK_FUNDAMENTALS" for g in provider_gaps):
+        provider_gaps.append({
+            "variable_id": "STOCK_FUNDAMENTALS",
+            "provider": "UPSTOX",
+            "provider_lane": "fundamentals_composite",
+            "status": "PROVIDER_PARTIAL",
+            "fallback_required": True,
+        })
+
+    if share is not None:
+        records.append(_record(
             stock, "STOCK_SHAREHOLDING",
             metric="quarterly_shareholding_history",
             values={"share_holdings": share["payload"]["data"]},
             timeframe="quarterly",
             provider_timestamp=None,
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             freshness_status="HISTORICAL",
             source_reference=share["source_path"],
             source_sha256=share["sha256"],
-        ),
-        _record(
+        ))
+    if peers is not None:
+        records.append(_record(
             stock, "STOCK_PEERS",
             metric="provider_competitor_set",
             values={"competitors": peers["payload"]["data"]},
             timeframe="snapshot",
             provider_timestamp=None,
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             freshness_status="HISTORICAL",
             source_reference=peers["source_path"],
             source_sha256=peers["sha256"],
-        ),
-        _record(
+        ))
+    if corp is not None:
+        records.append(_record(
             stock, "STOCK_CORPORATE_ACTIONS",
             metric="structured_corporate_actions",
             values={"corporate_actions": corp["payload"]["data"]},
             timeframe="event",
             provider_timestamp=None,
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             freshness_status="HISTORICAL",
             source_reference=corp["source_path"],
             source_sha256=corp["sha256"],
-        ),
-        _record(
+        ))
+    if news is not None:
+        records.append(_record(
             stock, "STOCK_NEWS_RECENT",
             metric="provider_news_last_7_days",
             values={"news": news["payload"]["data"]},
             timeframe="7d",
             provider_timestamp=None,
-            acquisition_timestamp=as_of,
+            acquisition_timestamp=record_at,
             freshness_status="HISTORICAL",
             source_reference=news["source_path"],
             source_sha256=news["sha256"],
-        ),
-    ]
+        ))
 
     if fo["fo_eligible"]:
         option_client = EdgeStockReadOnlyClient(
             token,
             approved_instruments={stock["instrument_key"]},
         )
-        contracts = option_client.option_contracts(
-            stock["instrument_key"],
-            expiry_date=fo["nearest_expiry"],
-        )
-        chain = option_client.option_chain(
-            stock["instrument_key"],
-            fo["nearest_expiry"],
-        )
-        records.append(_record(
-            stock, "STOCK_OPTIONS",
-            metric="exact_expiry_chain_premium_oi_change_volume_depth_greeks",
-            values={
-                "fo_identity": fo,
-                "contracts": contracts["payload"]["data"],
-                "chain": normalize_option_chain(
-                    chain,
-                    spot_price=stock_quote["last_price"],
-                ),
-            },
-            timeframe="quote",
-            provider_timestamp=as_of,
-            acquisition_timestamp=as_of,
-            source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_OPTIONS",
-            source_sha256=_sha(contracts["sha256"], chain["sha256"]),
-        ))
+        try:
+            contracts = option_client.option_contracts(
+                stock["instrument_key"],
+                expiry_date=fo["nearest_expiry"],
+            )
+            chain = option_client.option_chain(
+                stock["instrument_key"],
+                fo["nearest_expiry"],
+            )
+            records.append(_record(
+                stock, "STOCK_OPTIONS",
+                metric="exact_expiry_chain_premium_oi_change_volume_depth_greeks",
+                values={
+                    "fo_identity": fo,
+                    "contracts": contracts["payload"]["data"],
+                    "chain": normalize_option_chain(
+                        chain,
+                        spot_price=stock_quote["last_price"],
+                    ),
+                },
+                timeframe="quote",
+                provider_timestamp=None,
+                acquisition_timestamp=record_at,
+                freshness_status="HISTORICAL",
+                source_reference="UPSTOX_COMPOSITE:EDGE_STOCK_OPTIONS",
+                source_sha256=_sha(contracts["sha256"], chain["sha256"]),
+            ))
+        except PipelineError:
+            provider_gaps.append({
+                "variable_id": "STOCK_OPTIONS",
+                "provider": "UPSTOX",
+                "provider_lane": "option_contracts_or_chain",
+                "status": "PROVIDER_UNAVAILABLE",
+                "fallback_required": True,
+            })
 
     return {
         "stock_identity": stock,
         "fo_identity": fo,
         "benchmark_identity": benchmark_identity,
         "records": records,
+        "provider_gaps": provider_gaps,
         "provider": "UPSTOX",
         "provider_neutral_output": True,
         "read_only": True,
