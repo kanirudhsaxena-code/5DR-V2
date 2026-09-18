@@ -1,0 +1,44 @@
+name: Prepare incremental cache transfer branch
+
+on:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - '.g11/incremental_transfer_trigger.txt'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Download incremental proof artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 35312636839 --repo ${{ github.repository }} --name 5dr-incremental-cache-proof-2026-09-18 --dir incremental_transfer
+      - name: Verify incremental manifest
+        run: |
+          python - <<'PY'
+          import json,glob
+          m=json.load(open('incremental_transfer/manifest.json'))
+          assert m['status']=='INCREMENTAL_REFRESH_PASS'
+          assert m['series_count']==29
+          assert m['incremental_actual_calls']==29
+          assert len(glob.glob('incremental_transfer/documents/*.json'))==29
+          print('INCREMENTAL_TRANSFER_VERIFIED')
+          PY
+      - name: Push temporary incremental transfer branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B cache-incremental-transfer-20260918
+          git add -f incremental_transfer
+          git commit -m '[cache-transfer] incremental 29-series proof documents'
+          git push --force origin cache-incremental-transfer-20260918
