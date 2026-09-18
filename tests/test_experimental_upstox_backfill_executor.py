@@ -80,6 +80,14 @@ class BackfillExecutorTests(unittest.TestCase):
         self.assertEqual(row["chunks"][0]["start"], "2026-09-10")
         self.assertEqual(row["chunks"][-1]["end"], "2026-09-15")
 
+    def test_latest_cached_timestamp_uses_ist_session_date(self):
+        target = SERIES[4]  # NIFTY daily
+        latest = {series_id(target): "2026-09-16T18:30:00+00:00"}  # 17 Sep 00:00 IST
+        plan = build_initial_backfill_plan(date(2026, 9, 18), latest_cached=latest, rows=(target,))
+        row = plan["series"][0]
+        self.assertEqual(row["chunks"][0]["start"], "2026-09-17")
+        self.assertEqual(row["chunks"][-1]["end"], "2026-09-18")
+
 
 if __name__ == "__main__":
     unittest.main()
