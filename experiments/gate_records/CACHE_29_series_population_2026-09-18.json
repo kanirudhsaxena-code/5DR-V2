@@ -1,0 +1,52 @@
+{
+  "schema":"5dr-v2-2-3-gate-record-v1",
+  "gate":"HISTORICAL_CACHE_29_SERIES_POPULATION",
+  "status":"PASS",
+  "date":"2026-09-18",
+  "source_export":{
+    "workflow_run_id":35309279223,
+    "artifact_id":10532404608,
+    "artifact_digest":"sha256:2cb0432635a8deab71eff4c75abeb3ad8d614e4601fe929d7b6e2c5ef0898f82",
+    "as_of":"2026-09-17",
+    "series_count":29,
+    "provider_calls":90,
+    "validated_records":49819,
+    "billable_units":0,
+    "manifest_status":"BACKFILL_EXPORT_COMPLETE_WITH_EXACT_QUARANTINE"
+  },
+  "quality":{
+    "document_manifest_sha_mismatches":0,
+    "database_manifest_sha_mismatches":0,
+    "record_count_mismatches":0,
+    "quarantined_provider_rows":2,
+    "quarantines":[
+      {"instrument_key":"GLOBAL_INDEX|SGX NIFTY","timeframe":"1d","timestamp":"2026-07-19T00:00:00+05:30","reason":"PROVIDER_INVALID_OHLC_OPEN_ABOVE_HIGH","action":"QUARANTINED_NOT_CACHED"},
+      {"instrument_key":"GLOBAL_INDICATOR|CLUSD","timeframe":"1d","timestamp":"2026-06-18T00:00:00+05:30","reason":"PROVIDER_INVALID_OHLC_CLOSE_ABOVE_HIGH","action":"QUARANTINED_NOT_CACHED"}
+    ],
+    "provider_rows_repaired":0,
+    "fabricated_rows":0
+  },
+  "persistence":{
+    "neon_project":"flat-fire-21633692",
+    "branch_id":"br-gentle-math-aybvyzt5",
+    "branch_name":"market-data-cache-v223-experiment",
+    "database":"five_dr",
+    "table":"market_data_cache.market_cache_documents",
+    "cached_series":29,
+    "cached_records":49819,
+    "table_size":"5344 kB",
+    "index_size":"32 kB",
+    "total_relation_size":"5376 kB",
+    "readback_integrity":"PASS"
+  },
+  "isolation":{
+    "canonical_main_cache_table_present":false,
+    "production_5dr_write_enabled":false,
+    "forecast_release_enabled":false,
+    "lifecycle_write_enabled":false,
+    "trading_execution_enabled":false,
+    "pr30_merge_allowed":false,
+    "methodology_changed":false
+  },
+  "next":"INCREMENTAL_REFRESH_READINESS"
+}
