@@ -12,6 +12,11 @@ on:
         description: EDGE Console base URL
         required: true
         type: string
+      execution_packet:
+        description: Governed normalized execution packet JSON
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -37,44 +42,72 @@ jobs:
           test -n "$CF_ACCESS_CLIENT_ID"
           test -n "$CF_ACCESS_CLIENT_SECRET"
 
-      - name: Fetch governed execution packet
+      - name: Resolve governed execution packet
         env:
           CONSOLE_URL: ${{ inputs.console_url }}
           REQUEST_ID: ${{ inputs.request_id }}
+          EXECUTION_PACKET: ${{ inputs.execution_packet }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          ENDPOINT="$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet"
-
-          fetch_packet() {
-            rm -f request.json
-            curl --location --fail-with-body --silent --show-error "$@" \
-              -H "Accept: application/json" \
-              "$ENDPOINT" \
-              --output request.json || return 1
+          validate_packet() {
             python - <<'PY'
           import json
-          try:
-              with open("request.json", "r", encoding="utf-8") as handle:
-                  payload = json.load(handle)
-          except Exception:
-              raise SystemExit(1)
+          with open("request.json", "r", encoding="utf-8") as handle:
+              payload = json.load(handle)
           if not isinstance(payload, dict) or not isinstance(payload.get("evidence"), list):
-              raise SystemExit(1)
+              raise SystemExit("EDGE Console execution packet is not a governed JSON object")
+          required = ("request_id","provenance_mode","framework_version","output_contract_version")
+          missing = [key for key in required if not payload.get(key)]
+          if missing:
+              raise SystemExit("EDGE Console execution packet is missing required metadata: " + ",".join(missing))
+          print("governed_execution_packet_ok evidence_items=" + str(len(payload["evidence"])))
           PY
           }
 
-          if ! fetch_packet \
-              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"; then
-            echo "Authenticated preview fetch did not return governed JSON; retrying public preview path."
-            fetch_packet
+          if [ -n "$EXECUTION_PACKET" ]; then
+            printf '%s' "$EXECUTION_PACKET" > request.json
+            validate_packet
+          else
+            ENDPOINT="$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet"
+            fetch_packet() {
+              rm -f request.json
+              curl --location --fail-with-body --silent --show-error "$@" \
+                -H "Accept: application/json" \
+                "$ENDPOINT" \
+                --output request.json || return 1
+              validate_packet
+            }
+            if ! fetch_packet \
+                -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+                -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"; then
+              echo "Authenticated Console fetch did not return governed JSON; retrying public path."
+              fetch_packet
+            fi
           fi
 
       - name: Execute governed 5DR engine
         run: python -m src.runner --input request.json --publish > envelope.json
 
+      - name: Emit governed result handoff
+        run: |
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          raw = Path("envelope.json").read_bytes()
+          print("EDGE_CONSOLE_ENVELOPE_B64::" + base64.b64encode(raw).decode("ascii"))
+          PY
+
+      - name: Upload governed result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5dr-console-result-${{ inputs.request_id }}
+          path: envelope.json
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Publish validated result to EDGE Console
+        continue-on-error: true
         env:
           CONSOLE_URL: ${{ inputs.console_url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
