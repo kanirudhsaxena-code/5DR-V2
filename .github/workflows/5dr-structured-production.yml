@@ -50,7 +50,7 @@ jobs:
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          FIVE_DR_HISTORICAL_CACHE_MODE: SHADOW
+          FIVE_DR_HISTORICAL_CACHE_MODE: CACHE_FIRST
         run: python -m experiments.run_production_evidence
 
       - name: Emit governed judgment summary for the intelligence layer
