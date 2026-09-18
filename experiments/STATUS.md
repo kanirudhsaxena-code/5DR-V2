@@ -16,10 +16,10 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - G9 AUTONOMOUS WEB-CONTEXT INGESTION: PASS FOR GOVERNED LIVE EXECUTOR — live official/web source acquisition, bounded deterministic fact extraction, hashing, freshness and fail-closed reference-only handling proven.
 - G10 END-TO-END AUTONOMOUS 5DR SHADOW: PASS FOR NON-PUBLISHING LIVE SHADOW — frozen current structured evidence was bundle-bound to governed judgment and executed through the existing source-neutral engine with all side effects disabled.
 - G10-B MACRO-ENRICHED LIVE SHADOW: PASS_DIAGNOSTIC — governed official macro facts were incorporated without methodology change; diagnostic only, not production acceptance.
-- G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: PRIMARY MANUAL SERIES COMPLETE — 3/3 same-session manual pairs PASS on 17 Sep 2026. Consolidated state: `MANUAL_SERIES_PASS_ROLLOVER_PENDING`.
-- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending final G11 rollover completion, screenshot-retirement readiness assessment, and explicit user approval.
+- G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: PASS — 3/3 same-session manual pairs PASS on 17 Sep 2026 and next-session rollover PASS on 18 Sep 2026. Final gate: `experiments/gate_records/G11_final_2026-09-18.json`.
+- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: BLOCKED pending post-G11 isolated backfill/persistence/scheduler readiness audit and explicit user approval.
 - G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
-- ROUTINE SCREENSHOT RETIREMENT: NOT ACTIVATED pending next-session rollover and final G11 readiness assessment.
+- ROUTINE SCREENSHOT RETIREMENT READINESS: PASS — normal autonomous validation is screenshot-free ready; diagnostic screenshots remain an anomaly fallback. Production activation remains unapproved.
 
 ## G11 active validation protocol — v2
 
@@ -36,9 +36,10 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - >180 and <=300 seconds remains comparable-with-tolerance and must preserve the measured delta.
 - >300 seconds is observational-only and cannot count.
 - primary same-session manual series is now COMPLETE 3/3 PASS.
-- one separate lightweight next-session rollover validation remains required.
-- the rollover is not another screenshot-parity run unless an actual rollover anomaly requires diagnostic screenshots.
-- no production activation, forecast release, lifecycle write, trading execution, methodology change, screenshot retirement, or PR merge is authorized by the manual-series PASS alone.
+- one separate lightweight next-session rollover validation was completed PASS on 18 Sep 2026.
+- the rollover was not another screenshot-parity run; no anomaly required diagnostic screenshots.
+- final screenshot-retirement readiness is PASS for normal autonomous validation, while diagnostic screenshots remain available as an anomaly fallback.
+- no production activation, forecast release, lifecycle write, trading execution, methodology change, or PR merge is authorized by G11 PASS alone.
 
 The historical `experiments/gate_records/G11_observational_temporal_mismatch_2026-09-16.json` remains retained for audit and does not count toward the primary series.
 
@@ -103,27 +104,31 @@ Gate record: `experiments/gate_records/G11_manual_series_2026-09-17.json`.
 
 These three immutable manual runs must not be reacquired or repeated.
 
-## Only remaining G11 validation — next-session rollover
+## G11 completion — next-session rollover PASS
 
-Perform one lightweight validation in the next live NSE session only. Validate:
+Gate record: `experiments/gate_records/G11_rollover_2026-09-18.json`.
 
-1. new NSE session identity is recognized;
-2. current session date is bound correctly;
-3. stale prior-session market evidence is rejected;
-4. prior-session cache/bundle cannot be mistaken for current live evidence;
-5. option expiry identity is current and not stale;
-6. deterministic replay remains valid;
-7. evidence hash / fingerprint integrity remains valid;
-8. idempotency / duplicate handling remains fail-safe;
-9. `published=false`;
-10. `forecast_release_enabled=false`;
-11. `production_5dr_write_enabled=false`;
-12. `lifecycle_write_enabled=false`;
-13. `trading_execution_enabled=false`.
+- rollover workflow run: `35306193306` — SUCCESS.
+- session advanced from 2026-09-17 to 2026-09-18.
+- NFO status: `NORMAL_OPEN`.
+- selected current NIFTY expiry: `2026-09-22`.
+- rollover bundle SHA-256: `bdf82263ff69ef914849251160293cac7047829c06d7adf830decd9a78c434e7`.
+- capture SHA-256: `6ca2b19038e7b9a3e83fbffd23f1b8dc83e313766dd36fe3e0c9b3778b6869cd`.
+- rollover gate SHA-256: `7c63967cc3e9d3e651ae1316626599b35902fc7a5900d6c65cb505f4d9410d4a`.
+- new-session identity: PASS.
+- stale prior-session evidence rejection: PASS.
+- current-session date binding: PASS.
+- current expiry identity: PASS.
+- deterministic replay: PASS.
+- capture/evidence fingerprint integrity: PASS.
+- duplicate/idempotency guard: PASS.
+- side-effect isolation: PASS.
+- published / forecast release / production write / lifecycle write / trading execution: all FALSE.
 
-If rollover PASS: consolidate G11 as complete, perform final screenshot-retirement readiness assessment, synchronize status/audit wording and the existing Drive canonical spec only if required, and stop before production activation or PR #30 merge for explicit user approval.
+Final G11 record: `experiments/gate_records/G11_final_2026-09-18.json`.
 
-If rollover FAIL: preserve fail-closed state, identify the exact session/date/expiry/staleness defect, and fix only the execution/data-validation layer. Do not alter canonical methodology, scoring, weights, probability engine, tradeability gates or governance.
+Final G11 status: **PASS**.
+Screenshot-retirement readiness: **PASS / SCREENSHOT_FREE_READY** for normal autonomous validation. Routine retirement is a readiness decision only; production activation remains blocked until explicit user approval. Diagnostic screenshots remain permitted as an anomaly fallback.
 
 ## Current-head regression state
 
@@ -166,8 +171,8 @@ READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO.
 
 ## Current next gate
 
-1. Do not trigger or reacquire G11 Manual Runs 1, 2 or 3; the same-session 3/3 primary series is complete.
-2. Perform exactly one lightweight next-session rollover validation.
-3. Only after rollover PASS, produce final G11 consolidation and screenshot-retirement readiness assessment.
-4. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
-5. The full 29-series / 90-call historical backfill remains optional and disabled unless separately justified/approved for the isolated cache; it must never target canonical Neon `main` without explicit approval.
+1. G11 is complete; do not reacquire or repeat Manual Runs 1–3 or the 18 Sep rollover.
+2. Complete post-G11 isolated historical-cache/backfill readiness and persistence reconciliation without touching canonical Neon `main`.
+3. Complete scheduler/watchdog production-readiness audit with production triggers still disabled.
+4. Complete final GitHub + Drive audit and prepare the production-activation approval pack.
+5. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
