@@ -117,7 +117,7 @@ class EdgeIpoBridgeTests(unittest.TestCase):
     def test_tampered_export_rejected(self):
         export=make_export()
         export["subject"]["name"]="Tampered"
-        with self.assertRaises(DataArchitectureError,match="fingerprint"):
+        with self.assertRaisesRegex(DataArchitectureError,"fingerprint"):
             import_edge_ipo_export(export)
 
 
