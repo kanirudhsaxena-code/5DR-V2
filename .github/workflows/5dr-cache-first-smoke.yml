@@ -1,0 +1,28 @@
+name: 5DR V2.2.3 Cache-First Smoke
+on:
+  push:
+    branches: [main]
+    paths: ['runtime/cache_first_smoke_trigger.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check 'psycopg[binary]>=3.2,<4'
+      - name: Run cache-first no-provider historical smoke
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m experiments.run_production_cache_first_smoke
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 5dr-cache-first-smoke-${{ github.run_id }}
+          path: .production/cache_first_smoke/audit.json
+          if-no-files-found: error
+          retention-days: 30
