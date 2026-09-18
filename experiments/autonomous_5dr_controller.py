@@ -1,4 +1,4 @@
-"""Write-free autonomous 5DR judgment, calculation and release-candidate controller.
+"""Write-free autonomous 5DR controller through lifecycle/Learning Lab shadow.
 
 This composes the existing frozen evidence handoff and calculation engine with
 approval-gated provider interfaces. It never publishes forecasts, persists lifecycle
@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from experiments.autonomous_judgment_bridge import build_governed_judgment
+from experiments.autonomous_lifecycle_shadow import run_lifecycle_learning_shadow
 from experiments.autonomous_release_bridge import build_release_candidate
 from experiments.autonomous_shadow import run_structured_shadow
 
@@ -50,6 +51,27 @@ def run_autonomous_release_candidate(bundle: dict, judgment_provider, release_pr
         "bundle_sha256": calculated["bundle_sha256"],
         "release_candidate": candidate,
         "next_gate": "PERSISTENCE_LIFECYCLE_LEARNING_ACTIVATION",
+        "forecast_released": False,
+        "production_5dr_write_enabled": False,
+        "lifecycle_write_enabled": False,
+        "learning_lab_write_enabled": False,
+        "trading_execution_enabled": False,
+        "methodology_changed": False,
+    }
+
+
+def run_autonomous_full_shadow(bundle: dict, judgment_provider, release_provider, lifecycle_provider) -> dict:
+    """Execute the complete write-free autonomous 5DR chain."""
+    released = run_autonomous_release_candidate(bundle, judgment_provider, release_provider)
+    lifecycle = run_lifecycle_learning_shadow(released["release_candidate"], lifecycle_provider)
+    return {
+        "schema": "5dr-v2-2-3-autonomous-full-shadow-v1",
+        "status": "AUTONOMOUS_FULL_SHADOW_COMPLETE",
+        "request_id": released["request_id"],
+        "bundle_sha256": released["bundle_sha256"],
+        "release_candidate": deepcopy(released["release_candidate"]),
+        "lifecycle_learning_shadow": lifecycle,
+        "next_gate": "CONTROLLED_PERSISTENCE_AND_PROMPT_TRIGGER_VALIDATION",
         "forecast_released": False,
         "production_5dr_write_enabled": False,
         "lifecycle_write_enabled": False,
