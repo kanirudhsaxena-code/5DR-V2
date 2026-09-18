@@ -1,0 +1,47 @@
+name: 29-series incremental cache proof
+
+on:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - '.g11/incremental_cache_trigger.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 5dr-incremental-cache-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Verify incremental planner regression
+        run: python -m unittest tests.test_experimental_upstox_backfill_executor -v
+      - name: Materialize validated full-cache baseline
+        run: |
+          mkdir -p .shadow/baseline
+          git fetch origin cache-transfer-20260918:refs/remotes/origin/cache-transfer-20260918
+          git archive origin/cache-transfer-20260918 cache_transfer | tar -x -C .shadow/baseline
+      - name: Execute actual 29-series incremental refresh proof
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+          BASELINE_CACHE_DIR: .shadow/baseline/cache_transfer/documents
+        run: python -m experiments.run_incremental_cache_proof
+      - name: Upload incremental proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 5dr-incremental-cache-proof-2026-09-18
+          path: .shadow/incremental_refresh
+          if-no-files-found: error
+          retention-days: 1
