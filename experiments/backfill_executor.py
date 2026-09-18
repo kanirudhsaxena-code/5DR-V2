@@ -12,6 +12,7 @@ from experiments.backfill_inventory import SERIES, series_id, validate_inventory
 from experiments.data_contract import DataArchitectureError
 from experiments.upstox_history_policy import TIMEFRAME_MAP, plan_history_chunks
 from experiments.usage_ledger import UsageBudget, UsageLedger
+from phase1.upstox import PipelineError
 
 MAX_BARS_PER_CALENDAR_DAY = {
     "NSE_INDEX": {"5m": 75, "15m": 25, "30m": 13, "1h": 7, "1d": 1},
@@ -203,10 +204,16 @@ class BackfillExecutor:
         writes = 0
         for series in plan["series"]:
             for chunk in series["chunks"]:
-                envelope = self.provider.get_historical_candles(
-                    series["instrument_key"], series["timeframe"],
-                    date.fromisoformat(chunk["start"]), date.fromisoformat(chunk["end"]),
-                )
+                try:
+                    envelope = self.provider.get_historical_candles(
+                        series["instrument_key"], series["timeframe"],
+                        date.fromisoformat(chunk["start"]), date.fromisoformat(chunk["end"]),
+                    )
+                except (PipelineError, DataArchitectureError) as error:
+                    raise DataArchitectureError(
+                        "backfill provider validation failed for "
+                        f"{series['series_id']} {chunk['start']}..{chunk['end']}: {error}"
+                    ) from None
                 payload = envelope.get("payload", {}) if isinstance(envelope, dict) else {}
                 data = payload.get("data", {}) if isinstance(payload, dict) else {}
                 candles = data.get("candles") if isinstance(data, dict) else None
