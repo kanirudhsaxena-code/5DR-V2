@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from experiments.chart_structure import derive_multi_timeframe_evidence
+from experiments.cache_reconcile import reconcile_candles
 from experiments.data_contract import DataArchitectureError, build_record
 from experiments.evidence_bundle import build_evidence_bundle
 from experiments.live_web_context import collect_live_web_context
@@ -170,8 +171,21 @@ def _historical_window(client, cache_reader, cache_mode, timeframe, unit, interv
     if earliest is not None and latest is not None and date.fromisoformat(earliest) <= start and date.fromisoformat(latest) < end:
         tail_start = date.fromisoformat(latest)
         env = direct(tail_start, end)
-        rows = _merge_candles(cached["rows"], env["payload"]["data"]["candles"])
-        audit.update({"source": "UPSTOX_TAIL", "tail_calls_made": 1})
+        reconciled = reconcile_candles(
+            cached["records"], env["payload"]["data"]["candles"], env
+        )
+        rows = [
+            list(record["candle"])
+            for record in reconciled["records"]
+            if start <= _stamp(record["timestamp"]).astimezone(IST).date() <= end
+        ]
+        audit.update({
+            "source": "UPSTOX_TAIL",
+            "tail_calls_made": 1,
+            "tail_duplicate_count": reconciled["duplicate_count"],
+            "tail_correction_count": reconciled["correction_count"],
+            "tail_reconciled_dataset_sha": reconciled["dataset_sha256"],
+        })
         return rows, [cached["document_sha256"], cached["dataset_sha256"], env["sha256"]], audit
 
     env = direct(start, end)
