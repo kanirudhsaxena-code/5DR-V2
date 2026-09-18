@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -18,6 +19,7 @@ from experiments.data_contract import DataArchitectureError, build_record
 from experiments.evidence_bundle import build_evidence_bundle
 from experiments.live_web_context import collect_live_web_context
 from experiments.participation_universe import approved_participation_universe
+from experiments.production_cache_read import build_reader_from_database_url
 from experiments.upstox_catalog import PublicInstrumentCatalog
 from experiments.upstox_instruments import resolve_global_instruments, resolve_nearest_nifty_future
 from experiments.upstox_quality import classify_timestamp_freshness
@@ -116,6 +118,65 @@ def _merge_candles(*collections):
 
 def _series_digest(rows):
     return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+def _historical_window(client, cache_reader, cache_mode, timeframe, unit, interval, start, end):
+    """Return historical candles plus auditable cache-source metadata."""
+    direct = lambda a, b: client.historical(NIFTY, unit, interval, a, b)
+    audit = {
+        "source": "UPSTOX_DIRECT",
+        "cache_document_sha": None,
+        "dataset_sha": None,
+        "latest_cached_timestamp": None,
+        "provider_calls_avoided": 0,
+        "tail_calls_made": 0,
+        "shadow_exact_match": None,
+    }
+    if cache_mode == "OFF" or cache_reader is None:
+        env = direct(start, end)
+        return env["payload"]["data"]["candles"], [env["sha256"]], audit
+
+    try:
+        cached = cache_reader.read_nifty_window(timeframe, start, end)
+        audit.update({
+            "cache_document_sha": cached.get("document_sha256"),
+            "dataset_sha": cached.get("dataset_sha256"),
+            "latest_cached_timestamp": cached.get("latest_cached_timestamp"),
+        })
+    except Exception as error:
+        env = direct(start, end)
+        audit.update({"source": "FALLBACK", "fallback_reason": f"CACHE_INTEGRITY:{type(error).__name__}"})
+        return env["payload"]["data"]["candles"], [env["sha256"]], audit
+
+    if cache_mode == "SHADOW":
+        env = direct(start, end)
+        direct_rows = _merge_candles(env["payload"]["data"]["candles"])
+        cache_rows = _merge_candles(cached["rows"])
+        exact = cached["covers_required_window"] and _series_digest(direct_rows) == _series_digest(cache_rows)
+        audit.update({"source": "CACHE_SHADOW", "shadow_exact_match": exact})
+        if not exact:
+            raise DataArchitectureError(f"production cache shadow mismatch for {timeframe}")
+        return env["payload"]["data"]["candles"], [env["sha256"]], audit
+
+    if cache_mode != "CACHE_FIRST":
+        raise DataArchitectureError("production historical cache mode invalid")
+
+    if cached["covers_required_window"]:
+        audit.update({"source": "CACHE", "provider_calls_avoided": 1})
+        return cached["rows"], [cached["document_sha256"], cached["dataset_sha256"]], audit
+
+    earliest = cached.get("earliest_session_date")
+    latest = cached.get("latest_session_date")
+    if earliest is not None and latest is not None and date.fromisoformat(earliest) <= start and date.fromisoformat(latest) < end:
+        tail_start = date.fromisoformat(latest)
+        env = direct(tail_start, end)
+        rows = _merge_candles(cached["rows"], env["payload"]["data"]["candles"])
+        audit.update({"source": "UPSTOX_TAIL", "tail_calls_made": 1})
+        return rows, [cached["document_sha256"], cached["dataset_sha256"], env["sha256"]], audit
+
+    env = direct(start, end)
+    audit.update({"source": "FALLBACK", "fallback_reason": "CACHE_WINDOW_INCOMPLETE"})
+    return env["payload"]["data"]["candles"], [env["sha256"]], audit
 
 
 def _subject(subject_id, name, *, instrument_key=None, segment=None):
@@ -287,14 +348,23 @@ def build_live_shadow_bundle(token):
         "1h": ("hours", 1, 30),
         "1d": ("days", 1, 120),
     }
+    cache_mode = os.environ.get("FIVE_DR_HISTORICAL_CACHE_MODE", "OFF").strip().upper()
+    if cache_mode not in {"OFF", "SHADOW", "CACHE_FIRST"}:
+        raise DataArchitectureError("production historical cache mode invalid")
+    cache_reader = None
+    if cache_mode != "OFF":
+        cache_reader = build_reader_from_database_url(os.environ.get("DATABASE_URL", ""))
+
     source_series = {}
     series_provenance = {}
+    cache_audit = {}
     for timeframe, (unit, interval, lookback_days) in history_cfg.items():
         end = today - timedelta(days=1)
         start = today - timedelta(days=lookback_days)
-        historical = client.historical(NIFTY, unit, interval, start, end)
-        rows = historical["payload"]["data"]["candles"]
-        provenance = [historical["sha256"]]
+        rows, provenance, history_audit = _historical_window(
+            client, cache_reader, cache_mode, timeframe, unit, interval, start, end
+        )
+        cache_audit[timeframe] = history_audit
         if timeframe != "1d":
             intraday = client.intraday(NIFTY, unit, interval)
             rows = _merge_candles(rows, intraday["payload"]["data"]["candles"])
@@ -600,6 +670,10 @@ def build_live_shadow_bundle(token):
         "trading_enabled": False,
         "canonical_integration_enabled": False,
         "methodology_changed": False,
+        "historical_cache_mode": cache_mode,
+        "historical_cache_audit": cache_audit,
+        "historical_provider_calls_avoided": sum(row["provider_calls_avoided"] for row in cache_audit.values()),
+        "historical_tail_calls_made": sum(row["tail_calls_made"] for row in cache_audit.values()),
     }
     # runtime_context is part of the frozen object, so recompute the bundle digest.
     base = dict(bundle)
