@@ -227,14 +227,22 @@ def acquire_upstox_stock_core(token, *, symbol, benchmark_identity, as_of=None):
     series = {}
     series_sources = []
     for timeframe, (unit, interval, lookback) in history_cfg.items():
+        history_end = today if timeframe == "1d" else today - timedelta(days=1)
         rows, digests = _merge_historical_chunks(
             client,
             stock["instrument_key"],
             unit,
             interval,
             today - timedelta(days=lookback - 1),
-            today,
+            history_end,
         )
+        if timeframe != "1d":
+            intraday = client.intraday(stock["instrument_key"], unit, interval)
+            digests.append(intraday["sha256"])
+            merged = {_stamp(row[0]).isoformat(): row for row in rows}
+            for row in _candle_rows(intraday):
+                merged[_stamp(row[0]).isoformat()] = row
+            rows = [merged[key] for key in sorted(merged)]
         series[timeframe] = rows
         series_sources.extend(digests)
 
