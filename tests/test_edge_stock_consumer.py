@@ -52,6 +52,8 @@ def nse_rows():
 
 
 def record(variable_id, suffix):
+    import hashlib
+    digest = hashlib.sha256((variable_id + suffix).encode()).hexdigest()
     return build_record(
         provider_id="TEST_PROVIDER",
         source_semantic="OFFICIAL_WEB",
@@ -65,7 +67,7 @@ def record(variable_id, suffix):
         acquisition_timestamp=NOW,
         freshness_status="LIVE",
         source_reference="https://example.invalid/" + variable_id.lower(),
-        source_sha256=suffix * 64,
+        source_sha256=digest,
     )
 
 
