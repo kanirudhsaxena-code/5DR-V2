@@ -1,0 +1,44 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G7_CACHE_READ_THROUGH_SHADOW",
+  "status": "PASS",
+  "date": "2026-09-18",
+  "production_reference": {
+    "workflow_run_id": 35309563909,
+    "artifact_id": 10533165774,
+    "bundle_sha256": "166bf25613447b593bd14b94a21f073f95815768df2c8ab695a1d30846939c92",
+    "run_class": "LATE_MORNING_SNAPSHOT"
+  },
+  "cache_reference": {
+    "neon_project": "flat-fire-21633692",
+    "neon_branch": "br-gentle-math-aybvyzt5",
+    "series_count": 29,
+    "total_records": 49819,
+    "integrity_pass_count": 29
+  },
+  "nifty_historical_parity": [
+    {"timeframe":"5m","count":225,"fingerprint_md5":"355e217c17b964246e19d5ae9616ad1b","status":"EXACT_MATCH"},
+    {"timeframe":"15m","count":125,"fingerprint_md5":"07878bf2b06b4f42b84333a6090599a6","status":"EXACT_MATCH"},
+    {"timeframe":"30m","count":130,"fingerprint_md5":"01c6a38a76db83a4b8edb4917631355c","status":"EXACT_MATCH"},
+    {"timeframe":"1h","count":147,"fingerprint_md5":"d3c63e90dca30e6c3284ada5f018279c","status":"EXACT_MATCH"},
+    {"timeframe":"1d","count":83,"fingerprint_md5":"c1f3251d977d6c77c34b449c39b60bc7","status":"EXACT_MATCH"}
+  ],
+  "incremental_refresh": {
+    "workflow_run_id": 35312636839,
+    "status": "PASS",
+    "calls": 29,
+    "rows_received": 278,
+    "duplicates_deduplicated": 275,
+    "provider_corrections_persisted": 3,
+    "billable_units": 0
+  },
+  "governance": {
+    "cache_attached_to_production": false,
+    "canonical_cache_table_present": false,
+    "forecast_publication_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false
+  },
+  "next": "CACHE_INTEGRATION_CAN_MOVE_FROM_SHADOW_TO_GUARDED_PRODUCTION_READ_PATH_ONLY_AFTER_CURRENT_MAIN_STATE_IS_SYNCHRONIZED_AND_EXPLICITLY_COORDINATED_WITH_ACTIVE_PRODUCTION_RUNTIME"
+}
