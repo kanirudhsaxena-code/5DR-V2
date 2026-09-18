@@ -1,0 +1,49 @@
+name: 5DR PREOPEN Validation Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 08:50 IST weekdays. Validation only; this does not activate production PREOPEN.
+    - cron: '20 3 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 5dr-v223-preopen-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+
+      - name: Verify PREOPEN fail-closed contract
+        run: |
+          python -m unittest tests.test_experimental_preopen_evidence -v
+          python -m unittest tests.test_experimental_upstox_session -v
+          python -m unittest tests.test_experimental_upstox_history -v
+
+      - name: Acquire validation-only PREOPEN evidence
+        id: preopen
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.preopen_acquire
+
+      - name: Upload immutable PREOPEN validation artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 5dr-preopen-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .preopen/evidence
+          if-no-files-found: error
+          retention-days: 30
