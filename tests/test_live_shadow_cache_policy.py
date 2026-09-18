@@ -19,7 +19,12 @@ class Client:
         self.calls=[]
     def historical(self, key, unit, interval, start, end):
         self.calls.append((key,unit,interval,start,end))
-        return {"payload":{"data":{"candles":self.rows}},"sha256":"a"*64}
+        return {
+            "payload":{"data":{"candles":self.rows}},
+            "sha256":"a"*64,
+            "source_path":"/v3/historical-candle/test",
+            "received_at":"2026-09-18T10:00:00+00:00",
+        }
 
 
 class Reader:
@@ -67,7 +72,7 @@ def test_shadow_exact_match_preserves_direct_primary():
 def test_shadow_mismatch_fails_closed():
     client=Client()
     bad=[list(ROWS[0]),list(ROWS[1])]
-    bad[1][4]=99
+    bad[1][4]=2.4
     with pytest.raises(DataArchitectureError):
         _historical_window(
             client,Reader(rows=bad),"SHADOW","1d","days",1,date(2026,9,16),date(2026,9,17)
