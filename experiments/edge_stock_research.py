@@ -11,6 +11,10 @@ from datetime import datetime, timezone
 from experiments.data_contract import DataArchitectureError, build_record
 
 VARIABLE_SOURCE_RULES = {
+    "STOCK_PEERS": {
+        "allowed_roles": {"COMPANY_IR", "REPUTABLE_SECONDARY", "SECTOR_INDEX"},
+        "minimum_distinct_roles": 2,
+    },
     "STOCK_FORWARD_CATALYSTS": {
         "allowed_roles": {"COMPANY_IR", "NSE_DISCLOSURE", "BSE_DISCLOSURE"},
         "minimum_distinct_roles": 1,
