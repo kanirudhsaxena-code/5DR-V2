@@ -1,0 +1,5 @@
+mode=MANUAL_G11
+session_date_ist=2026-09-17
+manual_run_sequence=3
+user_approved_run_now=true
+triggered_at_ist=2026-09-17T14:19:07+05:30

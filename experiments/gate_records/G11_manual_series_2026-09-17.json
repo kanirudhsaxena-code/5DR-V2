@@ -1,0 +1,64 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G11_MANUAL_SAME_SESSION_SERIES",
+  "status": "MANUAL_SERIES_PASS_ROLLOVER_PENDING",
+  "session_date": "2026-09-17",
+  "protocol": "THREE_DISTINCT_MANUAL_LIVE_RUNS_ONE_NSE_SESSION_PLUS_SEPARATE_NEXT_SESSION_ROLLOVER",
+  "runs": [
+    {
+      "sequence": 1,
+      "manual_run_id": "G11-20260917-104405",
+      "evidence_cutoff_ist": "2026-09-17T10:44:05+05:30",
+      "bundle_sha256": "6fe9de7c379feecd5bb759e6a7eedec328af08f0a8278ae1b66abc8e621f105e",
+      "status": "PASS"
+    },
+    {
+      "sequence": 2,
+      "manual_run_id": "G11-20260917-134141",
+      "evidence_cutoff_ist": "2026-09-17T13:41:41.840036+05:30",
+      "bundle_sha256": "afe6d95ec65abbc3f5e3f53c1a084f84d693cbfb91b54bf214e013658573603a",
+      "status": "PASS"
+    },
+    {
+      "sequence": 3,
+      "manual_run_id": "G11-20260917-141937",
+      "evidence_cutoff_ist": "2026-09-17T14:19:37.618705+05:30",
+      "bundle_sha256": "ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881",
+      "status": "PASS"
+    }
+  ],
+  "series_findings": {
+    "timing_comparability": "PASS",
+    "spot_cross_source_parity": "PASS",
+    "listed_futures_or_synthetic_explanation": "PASS",
+    "option_ltp_iv_oi_reconciliation": "PASS",
+    "all_five_chart_timeframes_reconciled_each_run": true,
+    "material_pvs_divergence_detected": false,
+    "provider_specific_differences_explainable": true,
+    "production_side_effects_detected": false
+  },
+  "governance": {
+    "published": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "pr30_merge_allowed": false
+  },
+  "g11_final_gate_status": "PENDING_NEXT_SESSION_ROLLOVER",
+  "remaining_rollover_checks": [
+    "new_session_identity is recognized",
+    "stale prior-session market evidence is rejected",
+    "current session date is bound correctly",
+    "option expiry identity is current and not stale",
+    "deterministic replay and evidence hash remain valid",
+    "no production, lifecycle, forecast-release or trading side effects occur"
+  ],
+  "after_rollover_if_pass": [
+    "final screenshot-retirement readiness assessment",
+    "historical backfill/persistence/scheduler production-readiness work",
+    "GitHub and Drive status/audit synchronization",
+    "stop for explicit approval before production activation or PR merge"
+  ]
+}

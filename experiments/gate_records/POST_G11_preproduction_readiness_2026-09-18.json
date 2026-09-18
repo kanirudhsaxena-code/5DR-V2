@@ -1,0 +1,85 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "POST_G11_PREPRODUCTION_READINESS",
+  "status": "PASS_APPROVAL_PENDING",
+  "date": "2026-09-18",
+  "g11": {
+    "final_record": "experiments/gate_records/G11_final_2026-09-18.json",
+    "status": "PASS",
+    "screenshot_free_ready": true,
+    "diagnostic_screenshot_fallback_retained": true
+  },
+  "bounded_backfill_readiness": {
+    "status": "PASS_DRY_RUN_ONLY",
+    "workflow_run_id": 35306495320,
+    "workflow_job_id": 105479653108,
+    "as_of": "2026-09-17",
+    "series_count": 29,
+    "planned_calls": 90,
+    "estimated_rows_upper_bound": 115305,
+    "call_budget": 250,
+    "row_budget": 250000,
+    "billable_unit_budget": 0,
+    "plan_sha256": "54276f5017ccb41edd5b3631a8fe207af1003aa0da7d2adfd4ad5a985cee0275",
+    "network_calls_executed": 0,
+    "storage_writes_executed": 0,
+    "full_backfill_started": false
+  },
+  "persistence_reconciliation": {
+    "status": "PASS",
+    "neon_project": "flat-fire-21633692",
+    "isolated_branch": "br-gentle-math-aybvyzt5",
+    "isolated_branch_name": "market-data-cache-v223-experiment",
+    "database": "five_dr",
+    "isolated_cache_table": "market_data_cache.market_cache_documents",
+    "existing_smoke_rows": 1,
+    "smoke_document_schema_valid": true,
+    "smoke_series_identity_valid": true,
+    "smoke_document_sha_valid": true,
+    "smoke_dataset_sha_valid": true,
+    "smoke_record_count_valid": true,
+    "canonical_main_branch": "br-sweet-queen-aysaf1mw",
+    "canonical_cache_table_present": false
+  },
+  "scheduler_watchdog_readiness": {
+    "status": "PASS_OFFLINE_CURRENT_HEAD_CI",
+    "full_ci_run_id": 35306497978,
+    "full_ci_status": "SUCCESS",
+    "experimental_verification_run_id": 35306497993,
+    "experimental_verification_status": "SUCCESS",
+    "covered_behaviors": [
+      "NSE calendar handling",
+      "bounded canonical and intraday run windows",
+      "deterministic run-key idempotency",
+      "duplicate suppression",
+      "missed-run surfacing without silent catch-up",
+      "late execution prohibition",
+      "fail-closed invalid heartbeat/non-trading target behavior"
+    ],
+    "scheduled_lifecycle_guard": {
+      "workflow": ".github/workflows/lifecycle-scheduled-guard.yml",
+      "lifecycle_writes_enabled": false,
+      "evidence_adapter_attached": false,
+      "database_adapter_attached": false,
+      "result_mode": "NO_WRITE"
+    }
+  },
+  "governance": {
+    "published": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_activation_allowed": false,
+    "pr30_merge_allowed": false
+  },
+  "not_performed": [
+    "full 29-series historical backfill",
+    "canonical Neon cache creation or writes",
+    "production scheduler activation",
+    "production structured-data runtime activation",
+    "PR #30 merge"
+  ],
+  "next": "FINAL_GITHUB_DRIVE_AUDIT_THEN_STOP_FOR_EXPLICIT_PRODUCTION_APPROVAL"
+}

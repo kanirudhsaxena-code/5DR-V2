@@ -1,0 +1,41 @@
+name: 29-series historical cache export
+
+on:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - '.g11/backfill_execute_trigger.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 5dr-backfill-export-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Verify cache/backfill safety tests
+        run: python -m unittest tests.test_experimental_upstox_backfill_executor tests.test_experimental_upstox_backfill_integrity tests.test_experimental_upstox_cache_reconcile tests.test_experimental_upstox_cache_store tests.test_experimental_upstox_postgres_cache_store -v
+      - name: Export approved 29-series cache documents
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+          BACKFILL_AS_OF: '2026-09-17'
+        run: python -m experiments.run_backfill_export
+      - name: Upload immutable cache export
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 5dr-29-series-cache-export-2026-09-17
+          path: .shadow/backfill_export
+          if-no-files-found: error
+          retention-days: 1

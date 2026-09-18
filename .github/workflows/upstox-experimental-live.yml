@@ -1,0 +1,139 @@
+name: Experimental Upstox read-only live verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/upstox-readonly-data-service
+    paths:
+      - 'experiments/*.py'
+      - 'tests/test_experimental_upstox_*.py'
+      - 'phase1/upstox.py'
+      - '.github/workflows/upstox-experimental-live.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/*.py'
+      - 'tests/test_experimental_upstox_*.py'
+      - 'phase1/upstox.py'
+      - '.github/workflows/upstox-experimental-live.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-upstox-readonly-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Existing Upstox read-only safety tests
+        run: python -m unittest discover -s tests -p 'test_upstox_readonly.py' -v
+      - name: Experimental reliability and boundary tests
+        run: python -m unittest discover -s tests -p 'test_experimental_upstox_*.py' -v
+      - name: Curl read-only transport preflight
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]') && !contains(github.event.head_commit.message, '[bound-shadow]') && !contains(github.event.head_commit.message, '[macro-shadow]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: |
+          code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --get \
+            --data-urlencode 'instrument_key=NSE_INDEX|Nifty 50' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${UPSTOX_ANALYTICS_TOKEN}" \
+            'https://api.upstox.com/v3/market-quote/ltp')"
+          echo "curl_market_quote_http_status=${code}"
+          test "${code}" = '200'
+      - name: Authenticated read-only manifested live sample
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]') && !contains(github.event.head_commit.message, '[bound-shadow]') && !contains(github.event.head_commit.message, '[macro-shadow]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_upstox_manifested_sample
+      - name: 5DR quantitative backbone broad live probe
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[quant-probe]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_upstox_quant_probe
+      - name: Representative bounded historical live probe
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[history-probe]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_upstox_history_probe
+      - name: Live multi-timeframe chart derivation proof
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[chart-probe]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_upstox_chart_probe
+      - name: Live governed web-context proof
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[web-live]')
+        run: python -m experiments.run_live_web_context_probe
+      - name: Full screenshot-free shadow readiness proof
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[shadow-package]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_live_shadow_readiness
+      - name: Build frozen live shadow evidence bundle
+        id: live_bundle
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[live-bundle]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_live_shadow_bundle
+      - name: Save frozen live bundle by evidence digest
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-bundle]') && steps.live_bundle.outcome == 'success'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .shadow/live_bundle.json
+          key: 5dr-live-bundle-${{ steps.live_bundle.outputs.bundle_sha256 }}
+      - name: Restore exact frozen bundle for governed shadow
+        id: restore_bound_shadow_bundle
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[bound-shadow]')
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .shadow/live_bundle.json
+          key: 5dr-live-bundle-675bed4af880a3bad01ab69bfae045ba00f1de9a3ba1f5d614da1d36f1b33617
+          fail-on-cache-miss: true
+      - name: Execute exact bundle-bound governed 5DR shadow
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[bound-shadow]') && steps.restore_bound_shadow_bundle.outcome == 'success'
+        run: python -m experiments.run_bound_live_shadow
+      - name: Restore macro-enriched frozen bundle
+        id: restore_macro_shadow_bundle
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[macro-shadow]')
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .shadow/live_bundle.json
+          key: 5dr-live-bundle-1016031fee2463372584e7eb74528de3efc8226a9c80a10035d17547b1382914
+          fail-on-cache-miss: true
+      - name: Execute macro-enriched governed 5DR shadow
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[macro-shadow]') && steps.restore_macro_shadow_bundle.outcome == 'success'
+        run: python -m experiments.run_macro_enriched_shadow
+      - name: Public Participation catalog identity diagnostic
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[participation-catalog]')
+        run: python -m experiments.run_participation_catalog_diagnostic
+      - name: Non-binding Participation candidate live proof
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[participation-probe]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_participation_candidate_probe
+      - name: Backfill/cache budget dry run
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[backfill-dry-run]')
+        run: python -m experiments.run_backfill_dry_run
+      - name: Backfill one-call ephemeral live smoke
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[backfill-smoke]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_backfill_smoke
+      - name: Time-separated duplicate and freshness reliability check
+        if: github.event_name != 'pull_request' && !contains(github.event.head_commit.message, '[quant-probe]') && !contains(github.event.head_commit.message, '[history-probe]') && !contains(github.event.head_commit.message, '[chart-probe]') && !contains(github.event.head_commit.message, '[backfill-dry-run]') && !contains(github.event.head_commit.message, '[backfill-smoke]') && !contains(github.event.head_commit.message, '[cache-offline]') && !contains(github.event.head_commit.message, '[web-live]') && !contains(github.event.head_commit.message, '[shadow-package]') && !contains(github.event.head_commit.message, '[participation-probe]') && !contains(github.event.head_commit.message, '[participation-catalog]') && !contains(github.event.head_commit.message, '[live-bundle]') && !contains(github.event.head_commit.message, '[bound-shadow]') && !contains(github.event.head_commit.message, '[macro-shadow]')
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+          UPSTOX_RELIABILITY_DELAY_SECONDS: '75'
+        run: python -m experiments.run_upstox_reliability_pair

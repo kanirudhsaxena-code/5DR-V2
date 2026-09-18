@@ -1,0 +1,77 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "FINAL_PREPRODUCTION_AUDIT",
+  "status": "READY_FOR_EXPLICIT_USER_APPROVAL",
+  "date": "2026-09-18",
+  "repository": {
+    "name": "kanirudhsaxena-code/5DR-V2",
+    "branch": "experiment/upstox-readonly-data-service",
+    "head_sha": "9e2905d9ddc76a182335e19834337c1744d9c10b",
+    "pr_number": 30,
+    "pr_state": "OPEN",
+    "pr_draft": true,
+    "pr_merged": false
+  },
+  "validation": {
+    "g11_final_record": "experiments/gate_records/G11_final_2026-09-18.json",
+    "g11_status": "PASS",
+    "rollover_workflow_run_id": 35306193306,
+    "rollover_status": "PASS",
+    "screenshot_retirement_readiness": "PASS_SCREENSHOT_FREE_READY",
+    "post_g11_readiness_record": "experiments/gate_records/POST_G11_preproduction_readiness_2026-09-18.json",
+    "post_g11_readiness_status": "PASS_APPROVAL_PENDING"
+  },
+  "current_head_regression": {
+    "full_ci_run_id": 35306652805,
+    "full_ci_status": "SUCCESS",
+    "experimental_upstox_run_id": 35306652917,
+    "experimental_upstox_status": "SUCCESS"
+  },
+  "persistence": {
+    "isolated_neon_branch": "br-gentle-math-aybvyzt5",
+    "isolated_branch_name": "market-data-cache-v223-experiment",
+    "isolated_smoke_integrity": "PASS",
+    "canonical_main_cache_table_present": false,
+    "canonical_main_touched_by_cache_experiment": false,
+    "full_historical_backfill_run": false
+  },
+  "backfill_readiness": {
+    "status": "PASS_DRY_RUN_ONLY",
+    "series_count": 29,
+    "planned_calls": 90,
+    "estimated_rows_upper_bound": 115305,
+    "network_calls_executed": 0,
+    "storage_writes_executed": 0,
+    "billable_unit_budget": 0
+  },
+  "scheduler_watchdog": {
+    "status": "PASS_OFFLINE_AND_CURRENT_HEAD_CI",
+    "production_lifecycle_writes_enabled": false,
+    "production_evidence_adapter_attached": false,
+    "production_database_adapter_attached": false,
+    "scheduled_guard_mode": "NO_WRITE"
+  },
+  "drive": {
+    "canonical_document_id": "1bXpByuaDvBSE8caviNxROOl5OhHraTHRo77FX6tw41U",
+    "canonical_version": "5DR V2.2.3",
+    "status_wording_synchronized": true,
+    "new_spec_version_created": false,
+    "revision_id_after_sync": "ANLCKQkh-6NNPnb2beQJhIssWk13mEMuiEhzEUVsaWli7yAY7YaTczZvYkoN7KfwD1ATsB6g835CvEggzFvDa8622jLSuSZBrAeMAEcd40o"
+  },
+  "governance": {
+    "published": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_activation_performed": false,
+    "pr30_merge_performed": false
+  },
+  "approval_boundary": {
+    "explicit_user_approval_required_before_production_activation": true,
+    "explicit_user_approval_required_before_pr30_merge": true,
+    "full_29_series_historical_backfill_not_required_for_this_readiness_gate_and_not_run": true
+  },
+  "next": "STOP_FOR_EXPLICIT_USER_APPROVAL_BEFORE_ANY_PRODUCTION_ACTIVATION_OR_PR30_MERGE"
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "5dr-participation-proposal-v1",
+  "status": "PROPOSED_NOT_APPROVED",
+  "purpose": "Acquisition feasibility and governance proposal only; not active 5DR methodology/configuration.",
+  "heavyweights": [
+    {"label": "HDFCBANK", "instrument_key": "NSE_EQ|INE040A01034"},
+    {"label": "ICICIBANK", "instrument_key": "NSE_EQ|INE090A01021"},
+    {"label": "RELIANCE", "instrument_key": "NSE_EQ|INE002A01018"},
+    {"label": "BHARTIARTL", "instrument_key": "NSE_EQ|INE397D01024"},
+    {"label": "LT", "instrument_key": "NSE_EQ|INE018A01030"},
+    {"label": "SBIN", "instrument_key": "NSE_EQ|INE062A01020"},
+    {"label": "INFY", "instrument_key": "NSE_EQ|INE009A01021"},
+    {"label": "AXISBANK", "instrument_key": "NSE_EQ|INE238A01034"}
+  ],
+  "sector_indices": [
+    {"label": "Nifty Financial Services", "provider_name": "Nifty Fin Service", "instrument_key": "NSE_INDEX|Nifty Fin Service"},
+    {"label": "Nifty Oil & Gas", "provider_name": "NIFTY OIL AND GAS", "instrument_key": "NSE_INDEX|NIFTY OIL AND GAS"},
+    {"label": "Nifty IT", "provider_name": "Nifty IT", "instrument_key": "NSE_INDEX|Nifty IT"},
+    {"label": "Nifty Auto", "provider_name": "Nifty Auto", "instrument_key": "NSE_INDEX|Nifty Auto"}
+  ],
+  "live_proof": {
+    "status": "5DR_PARTICIPATION_CANDIDATE_LIVE_PROVEN",
+    "validated_instrument_count": 12,
+    "commit_sha": "2737484770109ec7ad444560b220d5efc0cad4bd",
+    "workflow_run_id": 35074603162,
+    "workflow_job_id": 104723888066,
+    "upstox_master_sha256": "e43f7826d21711e2d5ae64421b6856d65266143340b83504a5de0bca14994f2f"
+  },
+  "controls": {
+    "activation_enabled": false,
+    "screening_enabled": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "trading_enabled": false,
+    "methodology_changed": false,
+    "requires_explicit_approval": true
+  }
+}

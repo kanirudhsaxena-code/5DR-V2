@@ -1,0 +1,19 @@
+{
+  "schema": "5dr-participation-approval-v1",
+  "status": "APPROVED",
+  "approval_ref": "user-explicit-2026-09-16-participation-v1",
+  "approved_on": "2026-09-16",
+  "approval_source": "explicit_user_chat_approval",
+  "proposal_artifact": "experiments/participation_proposal.json",
+  "proposal_live_proof_commit": "2737484770109ec7ad444560b220d5efc0cad4bd",
+  "heavyweight_count": 8,
+  "sector_index_count": 4,
+  "controls": {
+    "screening_enabled": false,
+    "methodology_changed": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "trading_enabled": false,
+    "production_activation_approved": false
+  }
+}
