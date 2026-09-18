@@ -131,37 +131,54 @@ def main():
     base_provider = UpstoxAdapter(raw_client)
 
     class TracingProvider:
-        KNOWN_QUARANTINE = {
-            "instrument_key": "GLOBAL_INDEX|SGX NIFTY",
-            "timeframe": "1d",
-            "timestamp": "2026-07-19T00:00:00+05:30",
-            "open": 24373.5,
-            "high": 24371.5,
-            "low": 24092.0,
-            "close": 24125.0,
-            "volume": 0,
-            "open_interest": 0,
-        }
+        KNOWN_QUARANTINES = (
+            {
+                "instrument_key": "GLOBAL_INDEX|SGX NIFTY",
+                "timeframe": "1d",
+                "timestamp": "2026-07-19T00:00:00+05:30",
+                "open": 24373.5,
+                "high": 24371.5,
+                "low": 24092.0,
+                "close": 24125.0,
+                "volume": 0,
+                "open_interest": 0,
+                "reason": "PROVIDER_INVALID_OHLC_OPEN_ABOVE_HIGH",
+            },
+            {
+                "instrument_key": "GLOBAL_INDICATOR|CLUSD",
+                "timeframe": "1d",
+                "timestamp": "2026-06-18T00:00:00+05:30",
+                "open": 74.88,
+                "high": 76.06,
+                "low": 72.83,
+                "close": 76.58,
+                "volume": 0,
+                "open_interest": 0,
+                "reason": "PROVIDER_INVALID_OHLC_CLOSE_ABOVE_HIGH",
+            },
+        )
 
         def __init__(self):
             self.quarantines = []
 
-        @staticmethod
-        def _matches_known_quarantine(instrument_key, timeframe, row):
+        @classmethod
+        def _known_quarantine(cls, instrument_key, timeframe, row):
             if not isinstance(row, list) or len(row) != 7:
-                return False
-            expected = TracingProvider.KNOWN_QUARANTINE
-            return (
-                instrument_key == expected["instrument_key"]
-                and timeframe == expected["timeframe"]
-                and row[0] == expected["timestamp"]
-                and row[1] == expected["open"]
-                and row[2] == expected["high"]
-                and row[3] == expected["low"]
-                and row[4] == expected["close"]
-                and row[5] == expected["volume"]
-                and row[6] == expected["open_interest"]
-            )
+                return None
+            for expected in cls.KNOWN_QUARANTINES:
+                if (
+                    instrument_key == expected["instrument_key"]
+                    and timeframe == expected["timeframe"]
+                    and row[0] == expected["timestamp"]
+                    and row[1] == expected["open"]
+                    and row[2] == expected["high"]
+                    and row[3] == expected["low"]
+                    and row[4] == expected["close"]
+                    and row[5] == expected["volume"]
+                    and row[6] == expected["open_interest"]
+                ):
+                    return expected
+            return None
 
         def get_historical_candles(self, instrument_key, timeframe, start, end):
             marker = {
@@ -173,12 +190,11 @@ def main():
             }
             print(json.dumps(marker, sort_keys=True, separators=(",", ":")), flush=True)
 
-            # One exact provider anomaly was discovered during fail-closed export diagnosis:
-            # SGX/GIFT Nifty daily 2026-07-19 reports open > high by 2 points. For this
-            # one series we fetch the same authenticated raw endpoint, validate every row
-            # individually, and quarantine only the exact known fingerprint. Any other
-            # malformed row fails closed. Core provider validation is not relaxed.
-            if instrument_key == "GLOBAL_INDEX|SGX NIFTY" and timeframe == "1d":
+            expected_for_series = [
+                row for row in self.KNOWN_QUARANTINES
+                if row["instrument_key"] == instrument_key and row["timeframe"] == timeframe
+            ]
+            if expected_for_series:
                 unit, interval = UpstoxAdapter._HISTORICAL_TIMEFRAMES[timeframe]
                 path = historical_path(
                     instrument_key, unit, interval, start=start, end=end, intraday=False
@@ -186,8 +202,9 @@ def main():
                 envelope = raw_client._get(path)
                 raw_rows = envelope.get("payload", {}).get("data", {}).get("candles", [])
                 if not isinstance(raw_rows, list) or not raw_rows:
-                    raise DataArchitectureError("GIFT Nifty daily raw candle array missing")
+                    raise DataArchitectureError("quarantine-series raw candle array missing")
                 valid_rows = []
+                quarantined_this_call = []
                 for row in raw_rows:
                     try:
                         if not isinstance(row, list) or len(row) != 7:
@@ -201,22 +218,27 @@ def main():
                         )
                         valid_rows.append(row)
                     except Exception:
-                        if not self._matches_known_quarantine(instrument_key, timeframe, row):
+                        expected = self._known_quarantine(instrument_key, timeframe, row)
+                        if expected is None:
                             raise
                         quarantine = {
-                            **self.KNOWN_QUARANTINE,
-                            "reason": "PROVIDER_INVALID_OHLC_OPEN_ABOVE_HIGH",
+                            **expected,
                             "source_sha256": envelope.get("sha256"),
                             "action": "QUARANTINED_NOT_CACHED",
                         }
+                        quarantined_this_call.append(quarantine)
                         self.quarantines.append(quarantine)
                         print(json.dumps({
                             **marker,
                             "event": "BACKFILL_ROW_QUARANTINED",
                             "quarantine": quarantine,
                         }, sort_keys=True, separators=(",", ":")), flush=True)
-                if len(self.quarantines) != 1:
-                    raise DataArchitectureError("known GIFT Nifty quarantine count mismatch")
+                expected_in_range = [
+                    row for row in expected_for_series
+                    if start.isoformat() <= row["timestamp"][:10] <= end.isoformat()
+                ]
+                if len(quarantined_this_call) != len(expected_in_range):
+                    raise DataArchitectureError("exact provider quarantine count mismatch")
                 envelope["payload"]["data"]["candles"] = valid_rows
                 envelope["validated_candles"] = len(valid_rows)
             else:
