@@ -1,0 +1,63 @@
+{
+  "schema": "shared-backbone-phase1-gate-v1",
+  "gate_id": "SHARED_BACKBONE_PHASE1_2026-09-18",
+  "recorded_date": "2026-09-18",
+  "repository": "kanirudhsaxena-code/5DR-V2",
+  "base_branch": "main",
+  "working_branch": "feature/shared-consumer-backbone-phase1",
+  "pull_request": 39,
+  "validated_implementation_sha": "8f4b93c98facbc0dfe345f65bfcd20dc202029e2",
+  "status": "PASS",
+  "scope": "PHASE_1_SHARED_CONSUMER_NEUTRAL_BACKBONE_ONLY",
+  "checks": {
+    "shared_bundle_contract": "PASS",
+    "explicit_consumer_identity": "PASS",
+    "explicit_subject_identity": "PASS",
+    "run_id_preserved": "PASS",
+    "frozen_at_preserved": "PASS",
+    "bundle_sha256_preserved": "PASS",
+    "provenance_preserved": "PASS",
+    "consumer_specific_required_variable_validation": "PASS",
+    "consumer_cache_namespace": "PASS",
+    "consumer_run_ledger_namespace": "PASS",
+    "cross_consumer_contamination_rejection": "PASS",
+    "cross_subject_contamination_rejection": "PASS",
+    "provider_neutrality": "PASS",
+    "legacy_5dr_runtime_modified": false,
+    "legacy_5dr_bundle_modified": false,
+    "legacy_5dr_cache_document_modified": false,
+    "methodology_logic_added_to_backbone": false,
+    "forecast_release_enabled": false,
+    "canonical_forecast_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_enabled": false,
+    "historical_29_series_backfill_touched": false
+  },
+  "validation": {
+    "ci_workflow": {
+      "name": "5DR CI",
+      "run_id": 35312785388,
+      "conclusion": "success",
+      "test_job": "success"
+    },
+    "read_only_boundary_workflow": {
+      "name": "Experimental Upstox read-only live verification",
+      "run_id": 35312785556,
+      "conclusion": "success",
+      "safety_tests": "success",
+      "experimental_boundary_tests": "success",
+      "authenticated_live_steps": "skipped"
+    }
+  },
+  "activation": {
+    "merged_to_main": false,
+    "production_activated": false,
+    "requires_explicit_approval_before_merge": true
+  },
+  "next_phase_after_merge": "PHASE_2A_PREOPEN_EVIDENCE_PATH",
+  "notes": [
+    "The shared V1 contract is additive and leaves validated 5DR production evidence/cache behavior unchanged.",
+    "EDGE_STOCK and EDGE_IPO are namespaced and provisioned but are not production-certified by this gate.",
+    "No work from the separate 29-series historical backfill stream was duplicated or modified."
+  ]
+}
