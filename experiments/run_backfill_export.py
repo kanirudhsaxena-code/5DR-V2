@@ -18,6 +18,7 @@ from experiments.cache_store import build_cache_document, validate_cache_documen
 from experiments.data_contract import DataArchitectureError
 from experiments.upstox_adapter import UpstoxAdapter
 from experiments.upstox_quant_client import QuantReadOnlyClient
+from experiments.upstox_endpoints import historical_path
 from experiments.usage_ledger import UsageBudget
 
 OUTPUT_DIR = Path(".shadow/backfill_export")
@@ -125,7 +126,8 @@ def main():
     )
     plan = build_initial_backfill_plan(as_of, budget=budget)
     approved = {row["instrument_key"] for row in SERIES}
-    base_provider = UpstoxAdapter(QuantReadOnlyClient(token, approved))
+    raw_client = QuantReadOnlyClient(token, approved)
+    base_provider = UpstoxAdapter(raw_client)
 
     class TracingProvider:
         def get_historical_candles(self, instrument_key, timeframe, start, end):
@@ -137,9 +139,45 @@ def main():
                 "end": end.isoformat(),
             }
             print(json.dumps(marker, sort_keys=True, separators=(",", ":")), flush=True)
-            envelope = base_provider.get_historical_candles(
-                instrument_key, timeframe, start, end
-            )
+            try:
+                envelope = base_provider.get_historical_candles(
+                    instrument_key, timeframe, start, end
+                )
+            except Exception as exc:
+                if "Invalid OHLC geometry" in str(exc):
+                    unit, interval = UpstoxAdapter._HISTORICAL_TIMEFRAMES[timeframe]
+                    path = historical_path(
+                        instrument_key, unit, interval, start=start, end=end, intraday=False
+                    )
+                    raw = raw_client._get(path)
+                    rows = raw.get("payload", {}).get("data", {}).get("candles", [])
+                    bad = []
+                    for row in rows:
+                        if not isinstance(row, list) or len(row) != 7:
+                            bad.append({"row": row, "reason": "shape"})
+                            continue
+                        try:
+                            o, h, l, close = map(float, row[1:5])
+                            valid = l <= min(o, close) <= max(o, close) <= h and min(o, h, l, close) > 0
+                        except (TypeError, ValueError):
+                            valid = False
+                        if not valid:
+                            bad.append({
+                                "timestamp": row[0],
+                                "open": row[1],
+                                "high": row[2],
+                                "low": row[3],
+                                "close": row[4],
+                                "volume": row[5],
+                                "open_interest": row[6],
+                            })
+                    print(json.dumps({
+                        **marker,
+                        "event": "BACKFILL_OHLC_DIAGNOSTIC",
+                        "invalid_row_count": len(bad),
+                        "invalid_rows": bad[:20],
+                    }, sort_keys=True, separators=(",", ":")), flush=True)
+                raise
             rows = envelope.get("payload", {}).get("data", {}).get("candles", [])
             print(json.dumps({
                 **marker,
