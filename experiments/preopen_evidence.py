@@ -9,8 +9,9 @@ import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 
-from experiments.data_contract import DataArchitectureError
 from experiments.consumer_namespace import consumer_namespace
+from experiments.data_contract import DataArchitectureError
+from experiments.web_context import validate_web_context_item
 
 SCHEMA = "5dr-preopen-evidence-bundle-v1"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -22,6 +23,11 @@ REQUIRED_EXTERNAL_CATEGORIES = frozenset({
     "DXY_RATES",
     "MACRO_EVENTS_GEOPOLITICS",
 })
+SUBJECT_BY_VARIABLE = {
+    "NIFTY_PRICE_CANDLES": "NIFTY_50",
+    "GLOBAL_RISK_INDICES": "GLOBAL_RISK_INDICES",
+    "CRUDE_USDINR": "CRUDE_USDINR",
+}
 
 
 def _date(value, field):
@@ -56,7 +62,7 @@ def _hex(value, field):
     return value.lower()
 
 
-def _record_identity(record, variable_id, subject_id):
+def _record_identity(record, variable_id):
     if not isinstance(record, dict):
         raise DataArchitectureError(f"{variable_id} record invalid")
     if record.get("consumer") != "5DR":
@@ -64,7 +70,7 @@ def _record_identity(record, variable_id, subject_id):
     if record.get("variable_id") != variable_id:
         raise DataArchitectureError(f"{variable_id} identity mismatch")
     subject = record.get("subject")
-    if not isinstance(subject, dict) or subject.get("id") != subject_id:
+    if not isinstance(subject, dict) or subject.get("id") != SUBJECT_BY_VARIABLE[variable_id]:
         raise DataArchitectureError(f"{variable_id} subject mismatch")
     if record.get("eligible_for_consumer") is not True:
         raise DataArchitectureError(f"{variable_id} record ineligible")
@@ -74,7 +80,7 @@ def _record_identity(record, variable_id, subject_id):
 
 
 def _validate_prior_close(record, previous_session):
-    record = _record_identity(record, "NIFTY_PRICE_CANDLES", "NIFTY50")
+    record = _record_identity(record, "NIFTY_PRICE_CANDLES")
     if record.get("freshness_status") != "SESSION_FINAL":
         raise DataArchitectureError("preopen prior close must be SESSION_FINAL")
     provider = _aware(record.get("provider_timestamp"), "prior close provider timestamp")
@@ -88,7 +94,7 @@ def _validate_prior_close(record, previous_session):
 
 def _validate_overnight(record, variable_id, frozen_at, previous_session,
                         max_age_seconds):
-    record = _record_identity(record, variable_id, "NIFTY50")
+    record = _record_identity(record, variable_id)
     provider = _aware(record.get("provider_timestamp"), f"{variable_id} provider timestamp")
     acquired = _aware(record.get("acquisition_timestamp"), f"{variable_id} acquisition timestamp")
     if provider.date() < previous_session:
@@ -106,19 +112,14 @@ def _validate_overnight(record, variable_id, frozen_at, previous_session,
 
 
 def _validate_external(item, frozen_at, max_age_seconds):
-    if not isinstance(item, dict):
-        raise DataArchitectureError("preopen external evidence invalid")
-    category = item.get("category")
-    if category not in REQUIRED_EXTERNAL_CATEGORIES:
+    validated = validate_web_context_item(
+        item,
+        frozen_at=frozen_at,
+        max_age_seconds=max_age_seconds,
+    )
+    if validated["category"] not in REQUIRED_EXTERNAL_CATEGORIES:
         raise DataArchitectureError("preopen external category invalid")
-    if item.get("validation_status") != "VALID":
-        raise DataArchitectureError("preopen external evidence not validated")
-    _hex(item.get("source_sha256"), "preopen external source sha")
-    retrieved = _aware(item.get("retrieved_at"), "preopen external retrieval")
-    age = (frozen_at - retrieved).total_seconds()
-    if age < 0 or age > max_age_seconds:
-        raise DataArchitectureError("preopen external evidence stale")
-    return deepcopy(item)
+    return validated
 
 
 def build_preopen_evidence_bundle(*, target_session_date, previous_session_date,
@@ -169,12 +170,13 @@ def build_preopen_evidence_bundle(*, target_session_date, previous_session_date,
         raise DataArchitectureError("preopen external evidence invalid")
     external = [_validate_external(item, frozen, external_max_age_seconds)
                 for item in external_evidence]
-    categories = [item["category"] for item in external]
-    if len(categories) != len(set(categories)):
-        raise DataArchitectureError("preopen duplicate external category")
-    missing_external = sorted(REQUIRED_EXTERNAL_CATEGORIES - set(categories))
+    categories = {item["category"] for item in external}
+    missing_external = sorted(REQUIRED_EXTERNAL_CATEGORIES - categories)
     if missing_external:
         raise DataArchitectureError(f"preopen external categories missing: {missing_external}")
+    fingerprints = [item["research_sha256"] for item in external]
+    if len(fingerprints) != len(set(fingerprints)):
+        raise DataArchitectureError("preopen duplicate external evidence")
 
     provenance = [{
         "kind": "PRIOR_SESSION_CLOSE",
@@ -190,19 +192,20 @@ def build_preopen_evidence_bundle(*, target_session_date, previous_session_date,
             "record_fingerprint": record["record_fingerprint"],
             "source_sha256": record["source_sha256"],
         })
-    for item in sorted(external, key=lambda x: x["category"]):
+    for item in sorted(external, key=lambda x: (x["category"], x["source_reference"])):
         provenance.append({
             "kind": "EXTERNAL_CONTEXT",
             "category": item["category"],
-            "source_reference": item.get("source_reference"),
+            "source_reference": item["source_reference"],
             "source_sha256": item["source_sha256"],
+            "research_sha256": item["research_sha256"],
         })
 
     bundle = {
         "schema": SCHEMA,
         "consumer": "5DR",
-        "subject": {"kind": "MARKET_INSTRUMENT", "id": "NIFTY50", "name": "NIFTY 50"},
-        "namespace": consumer_namespace("5DR", "NIFTY50"),
+        "subject": {"kind": "MARKET_INSTRUMENT", "id": "NIFTY_50", "name": "NIFTY 50"},
+        "namespace": consumer_namespace("5DR", "NIFTY_50"),
         "run_id": run_id.strip(),
         "run_key": run_key,
         "target_session_date": target.isoformat(),
@@ -246,7 +249,7 @@ def verify_preopen_evidence_bundle(bundle):
         raise DataArchitectureError("preopen bundle fingerprint mismatch")
     if bundle.get("status") != "READY":
         raise DataArchitectureError("preopen bundle not READY")
-    if bundle.get("consumer") != "5DR" or bundle.get("namespace") != "5DR:NIFTY50":
+    if bundle.get("consumer") != "5DR" or bundle.get("namespace") != "5DR:NIFTY_50":
         raise DataArchitectureError("preopen bundle identity invalid")
     side_effects = bundle.get("side_effects")
     if not isinstance(side_effects, dict) or any(value is not False for value in side_effects.values()):
