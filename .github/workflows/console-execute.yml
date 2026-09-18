@@ -110,7 +110,7 @@ jobs:
         continue-on-error: true
         env:
           CONSOLE_URL: ${{ inputs.console_url }}
-          STABLE_CONSOLE_URL: https://sole.k-anirudhsaxena.workers.dev
+          STABLE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
