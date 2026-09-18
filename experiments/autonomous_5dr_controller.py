@@ -11,6 +11,7 @@ from copy import deepcopy
 from experiments.autonomous_judgment_bridge import build_governed_judgment
 from experiments.autonomous_lifecycle_shadow import run_lifecycle_learning_shadow
 from experiments.autonomous_release_bridge import build_release_candidate
+from experiments.autonomous_persistence_bridge import persist_release_candidate
 from experiments.autonomous_shadow import run_structured_shadow
 
 
@@ -74,6 +75,28 @@ def run_autonomous_full_shadow(bundle: dict, judgment_provider, release_provider
         "next_gate": "CONTROLLED_PERSISTENCE_AND_PROMPT_TRIGGER_VALIDATION",
         "forecast_released": False,
         "production_5dr_write_enabled": False,
+        "lifecycle_write_enabled": False,
+        "learning_lab_write_enabled": False,
+        "trading_execution_enabled": False,
+        "methodology_changed": False,
+    }
+
+
+def run_autonomous_production(bundle: dict, judgment_provider, release_provider, persistence_provider) -> dict:
+    """Execute autonomous calculation + validated release + governed canonical persistence."""
+    released = run_autonomous_release_candidate(bundle, judgment_provider, release_provider)
+    persisted = persist_release_candidate(released["release_candidate"], persistence_provider)
+    return {
+        "schema": "5dr-v2-2-3-autonomous-production-v1",
+        "status": "AUTONOMOUS_PRODUCTION_PERSISTED",
+        "request_id": released["request_id"],
+        "bundle_sha256": released["bundle_sha256"],
+        "forecast_id": persisted["forecast_id"],
+        "release_candidate": deepcopy(released["release_candidate"]),
+        "persistence_receipt": persisted,
+        "next_gate": "OUTCOME_CHECKPOINT_AND_LEARNING_LIFECYCLE",
+        "forecast_released": True,
+        "production_5dr_write_enabled": True,
         "lifecycle_write_enabled": False,
         "learning_lab_write_enabled": False,
         "trading_execution_enabled": False,
