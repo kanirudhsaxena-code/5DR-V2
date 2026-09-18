@@ -173,8 +173,8 @@ READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO — explicit user approval r
 
 ## Current next gate
 
-1. G11 is complete; do not reacquire or repeat Manual Runs 1–3 or the 18 Sep rollover.
-2. Post-G11 bounded backfill readiness, isolated persistence reconciliation and scheduler/watchdog readiness are complete and PASS.
-3. Complete final GitHub + Drive audit and prepare the production-activation approval pack.
+1. G11 is complete PASS; do not reacquire or repeat Manual Runs 1–3 or the 18 Sep rollover.
+2. Post-G11 bounded backfill readiness, isolated persistence reconciliation and scheduler/watchdog readiness are complete PASS.
+3. Final GitHub + Drive audit is complete; approval pack: `experiments/gate_records/FINAL_preproduction_audit_2026-09-18.json`.
 4. Full 29-series historical backfill has NOT been run; it remains separately approval-gated if desired before/after activation.
-5. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
+5. STOP HERE. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
