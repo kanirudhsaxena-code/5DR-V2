@@ -1,4 +1,5 @@
 name: 5DR Console Execute
+run-name: 5DR Console Execute · ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -43,11 +44,19 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          curl --fail --silent --show-error \
+          curl --location --fail-with-body --silent --show-error \
+            -H "Accept: application/json" \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             "$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet" \
             --output request.json
+          python - <<'PY'
+          import json
+          with open("request.json", "r", encoding="utf-8") as handle:
+              payload = json.load(handle)
+          if not isinstance(payload, dict) or not isinstance(payload.get("evidence"), list):
+              raise SystemExit("EDGE Console execution packet is not a governed JSON object")
+          PY
 
       - name: Execute governed 5DR engine
         run: python -m src.runner --input request.json --publish > envelope.json
@@ -58,10 +67,27 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          curl --fail --silent --show-error \
+          curl --location --fail-with-body --silent --show-error \
             -X POST \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             -H "Content-Type: application/json" \
             --data-binary @envelope.json \
             "$CONSOLE_URL/api/5dr/runs"
+
+      - name: Mark Console request failed
+        if: failure()
+        env:
+          CONSOLE_URL: ${{ inputs.console_url }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          printf '%s' '{"error":"5DR Console Execute workflow failed before validated publication"}' > failure.json
+          curl --location --fail-with-body --silent --show-error \
+            -X POST \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            --data-binary @failure.json \
+            "$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/fail" || true
