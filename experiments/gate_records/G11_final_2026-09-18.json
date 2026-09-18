@@ -1,0 +1,62 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G11_FINAL_VALIDATION",
+  "status": "PASS",
+  "manual_series": {
+    "record": "experiments/gate_records/G11_manual_series_2026-09-17.json",
+    "status": "MANUAL_SERIES_PASS_ROLLOVER_PENDING",
+    "runs": [
+      {"manual_run_id": "G11-20260917-104405", "status": "PASS", "bundle_sha256": "6fe9de7c379feecd5bb759e6a7eedec328af08f0a8278ae1b66abc8e621f105e"},
+      {"manual_run_id": "G11-20260917-134141", "status": "PASS", "bundle_sha256": "afe6d95ec65abbc3f5e3f53c1a084f84d693cbfb91b54bf214e013658573603a"},
+      {"manual_run_id": "G11-20260917-141937", "status": "PASS", "bundle_sha256": "ca2b93148ecba6585c667ec93b55490425ebb81418435aad66d37e11e7e58881"}
+    ],
+    "material_pvs_divergence_detected": false
+  },
+  "next_session_rollover": {
+    "record": "experiments/gate_records/G11_rollover_2026-09-18.json",
+    "workflow_run_id": 35306193306,
+    "status": "PASS",
+    "rollover_run_key": "G11_ROLLOVER:2026-09-18",
+    "gate_sha256": "7c63967cc3e9d3e651ae1316626599b35902fc7a5900d6c65cb505f4d9410d4a",
+    "bundle_sha256": "bdf82263ff69ef914849251160293cac7047829c06d7adf830decd9a78c434e7",
+    "capture_sha256": "6ca2b19038e7b9a3e83fbffd23f1b8dc83e313766dd36fe3e0c9b3778b6869cd",
+    "selected_expiry": "2026-09-22",
+    "market_status": "NORMAL_OPEN",
+    "checks": {
+      "new_session_identity": "PASS",
+      "prior_session_evidence_rejected": "PASS",
+      "current_session_date_bound": "PASS",
+      "current_expiry_identity": "PASS",
+      "deterministic_replay": "PASS",
+      "capture_fingerprint_integrity": "PASS",
+      "duplicate_idempotency_guard": "PASS",
+      "side_effect_isolation": "PASS"
+    }
+  },
+  "screenshot_retirement_readiness": {
+    "status": "PASS",
+    "normal_autonomous_validation_mode": "SCREENSHOT_FREE_READY",
+    "routine_screenshot_retirement_activated": false,
+    "diagnostic_screenshot_fallback_retained": true,
+    "basis": [
+      "three comparable same-session screenshot-vs-structured pairs passed without material PVS divergence",
+      "next-session identity and stale-prior-session rejection passed",
+      "current expiry identity passed",
+      "deterministic replay and immutable evidence fingerprint integrity passed",
+      "duplicate/idempotency guard passed",
+      "production/trading/write isolation remained intact"
+    ]
+  },
+  "governance": {
+    "published": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "production_activation_allowed": false,
+    "pr30_merge_allowed": false
+  },
+  "next": "POST_G11_ISOLATED_BACKFILL_PERSISTENCE_SCHEDULER_READINESS_AND_FINAL_AUDIT_BEFORE_EXPLICIT_PRODUCTION_APPROVAL",
+  "gate_sha256": "8a78e4e7528584540b8f32dcf0661f4c216f99b601d541eb4daeae534875c6dc"
+}
