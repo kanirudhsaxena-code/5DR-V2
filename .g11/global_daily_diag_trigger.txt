@@ -1,0 +1,6 @@
+scope=GLOBAL_DAILY_11_SERIES_OHLC_SCAN
+start=2025-09-18
+end=2026-09-17
+read_only=true
+persistent_writes=false
+triggered_at_ist=2026-09-18T10:17:28+05:30
