@@ -1,0 +1,39 @@
+{
+  "schema": "5dr-preopen-build-gate-v1",
+  "gate_id": "PREOPEN_BUILD_2026-09-18",
+  "recorded_date": "2026-09-18",
+  "repository": "kanirudhsaxena-code/5DR-V2",
+  "implementation_commit": "5fe8526680a3c14898baa90cd1b34c1dfa84ee89",
+  "status": "OFFLINE_PASS_LIVE_VALIDATION_PENDING",
+  "checks": {
+    "previous_session_close_contract": "PASS",
+    "overnight_global_risk_contract": "PASS",
+    "crude_usdinr_contract": "PASS",
+    "dxy_rates_context_contract": "PASS",
+    "macro_events_geopolitics_contract": "PASS",
+    "target_date_binding": "PASS",
+    "active_expiry_binding": "PASS",
+    "duplicate_idempotency_guard": "PASS",
+    "provenance_fingerprint_integrity": "PASS",
+    "stale_data_rejection": "PASS",
+    "cross_consumer_rejection": "PASS",
+    "cross_subject_rejection": "PASS",
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_enabled": false,
+    "methodology_changed": false
+  },
+  "validation": {
+    "ci_run": 35313495028,
+    "ci_conclusion": "success",
+    "read_only_boundary_run": 35313495005,
+    "read_only_boundary_conclusion": "success"
+  },
+  "live_gate": {
+    "status": "PENDING",
+    "required_window_ist": "08:45-09:00",
+    "production_activation_allowed": false,
+    "reason": "No same-window live PREOPEN run has yet been proven."
+  }
+}
