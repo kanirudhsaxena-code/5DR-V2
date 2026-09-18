@@ -1,0 +1,56 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "V223_STRUCTURED_PRODUCTION_ACTIVATION",
+  "status": "STRUCTURED_EVIDENCE_PRODUCTION_ACTIVE",
+  "date": "2026-09-18",
+  "integration": {
+    "pr30_merge_commit": "7972d660078d28d0631f822e21cb1fc6b495776b",
+    "production_runtime_pr": 37,
+    "production_runtime_merge_commit": "d611576b8e2a0f5d316d9bc849f81fc9141696c7",
+    "trigger_support_pr": 38,
+    "trigger_support_merge_commit": "7b4126d1fd1fee9ad299253393d1f16a51a30d6d",
+    "smoke_trigger_commit": "614b9401da284cf02d87f69b4892a03d3e5cc02d"
+  },
+  "production_smoke": {
+    "workflow_run_id": 35309563909,
+    "workflow_job_id": 105488577527,
+    "conclusion": "SUCCESS",
+    "session_date_ist": "2026-09-18",
+    "label": "LATE_MORNING_SNAPSHOT",
+    "run_class": "INTRADAY_SNAPSHOT",
+    "bundle_run_id": "V223-SHADOW-20260918T050814Z",
+    "bundle_sha256": "166bf25613447b593bd14b94a21f073f95815768df2c8ab695a1d30846939c92",
+    "artifact_id": 10533165774,
+    "artifact_digest": "sha256:d1423907c552962f0eaed99e818bc80bda1728381e23d83cc945fe7c75d86994",
+    "artifact_retention_until": "2026-10-18T05:08:16Z",
+    "main_ci_run_id": 35309563911,
+    "main_ci_status": "SUCCESS"
+  },
+  "active_schedule": {
+    "late_morning_snapshot": "10:30 IST weekdays; validated execution window 10:25-10:40 IST",
+    "prior_close_refresh": "15:25 IST weekdays; validated execution window 15:20-15:35 IST",
+    "preopen_refresh": {
+      "enabled": false,
+      "status": "FAIL_CLOSED_PENDING_SEPARATE_CARRY_FORWARD_AND_OVERNIGHT_REFRESH_VALIDATION"
+    }
+  },
+  "evidence_policy": {
+    "structured_evidence_primary": true,
+    "routine_screenshot_required": false,
+    "diagnostic_screenshot_fallback_retained": true
+  },
+  "governance": {
+    "methodology_changed": false,
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "upstox_read_only": true,
+    "automatic_forecast_publication_enabled": false
+  },
+  "scope_boundary": {
+    "historical_backfill_owned_by_parallel_chat": true,
+    "historical_backfill_modified_by_this_activation": false
+  },
+  "next": "VALIDATE_FIRST_PRIOR_CLOSE_SCHEDULED_RUN_AND_SEPARATELY_BUILD_PREOPEN_CARRY_FORWARD_PATH_BEFORE_ENABLING_PREOPEN"
+}
