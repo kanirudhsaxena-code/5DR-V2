@@ -1,6 +1,6 @@
 # Experimental 5DR autonomous market-data status
 
-PR #30 remains experimental, draft and unmerged. The Drive canonical specification remains 5DR V2.2.3. Production forecasting/scoring semantics remain frozen and no experimental code is connected to the canonical production consumer without explicit approval.
+PR #30 is merged into canonical `main` under explicit user approval dated 18 Sep 2026. The Drive canonical specification remains 5DR V2.2.3. Production forecasting/scoring semantics remain frozen. The validated V2.2.3 structured-evidence acquisition layer is active on canonical `main` for approved live windows; forecast publication, production forecast writes, lifecycle writes and trading remain disabled.
 
 ## Current gate summary
 
@@ -17,9 +17,11 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - G10 END-TO-END AUTONOMOUS 5DR SHADOW: PASS FOR NON-PUBLISHING LIVE SHADOW — frozen current structured evidence was bundle-bound to governed judgment and executed through the existing source-neutral engine with all side effects disabled.
 - G10-B MACRO-ENRICHED LIVE SHADOW: PASS_DIAGNOSTIC — governed official macro facts were incorporated without methodology change; diagnostic only, not production acceptance.
 - G11 PAIRED SCREENSHOT-ASSISTED VS STRUCTURED VALIDATION: PASS — 3/3 same-session manual pairs PASS on 17 Sep 2026 and next-session rollover PASS on 18 Sep 2026. Final gate: `experiments/gate_records/G11_final_2026-09-18.json`.
-- G12 PRODUCTION RUNTIME / PERSISTENCE ACTIVATION: PREPRODUCTION READINESS PASS / ACTIVATION BLOCKED — bounded backfill dry-run, isolated persistence reconciliation and scheduler/watchdog audit passed; explicit user approval is still required before activation.
-- G13 PRODUCTION MERGE / INTEGRATION: BLOCKED pending explicit user approval.
-- ROUTINE SCREENSHOT RETIREMENT READINESS: PASS — normal autonomous validation is screenshot-free ready; diagnostic screenshots remain an anomaly fallback. Production activation remains unapproved.
+- G12 STRUCTURED-EVIDENCE PRODUCTION RUNTIME: ACTIVE FOR VALIDATED LIVE WINDOWS — 10:30 IST intraday snapshot and 15:25 IST prior-close canonical-candidate evidence acquisition are scheduled on canonical `main`; first live production smoke PASS on 18 Sep 2026.
+- G13 PRODUCTION MERGE / INTEGRATION: PASS — PR #30 merged into `main` at `7972d660078d28d0631f822e21cb1fc6b495776b`; activation PR #37 merged at `d611576b8e2a0f5d316d9bc849f81fc9141696c7`.
+- ROUTINE SCREENSHOT POLICY: RETIRED FOR NORMAL VALIDATED LIVE EVIDENCE WINDOWS — structured evidence is primary; screenshots remain diagnostic/anomaly fallback only.
+- FORECAST PUBLICATION / CANONICAL FORECAST WRITE / LIFECYCLE WRITE / TRADING: DISABLED — structured evidence activation does not itself authorize these side effects.
+- PREOPEN STRUCTURED REFRESH: BLOCKED/FAIL-CLOSED pending separate validation of prior-session carry-forward plus overnight/global refresh.
 
 ## G11 active validation protocol — v2
 
@@ -39,7 +41,7 @@ PR #30 remains experimental, draft and unmerged. The Drive canonical specificati
 - one separate lightweight next-session rollover validation was completed PASS on 18 Sep 2026.
 - the rollover was not another screenshot-parity run; no anomaly required diagnostic screenshots.
 - final screenshot-retirement readiness is PASS for normal autonomous validation, while diagnostic screenshots remain available as an anomaly fallback.
-- no production activation, forecast release, lifecycle write, trading execution, methodology change, or PR merge is authorized by G11 PASS alone.
+- G11 PASS plus the user's explicit 18 Sep 2026 approval authorized the subsequent structured-evidence production integration. That approval did not alter frozen methodology and did not enable automatic forecast publication, lifecycle writes or trading.
 
 The historical `experiments/gate_records/G11_observational_temporal_mismatch_2026-09-16.json` remains retained for audit and does not count toward the primary series.
 
@@ -128,11 +130,11 @@ Gate record: `experiments/gate_records/G11_rollover_2026-09-18.json`.
 Final G11 record: `experiments/gate_records/G11_final_2026-09-18.json`.
 
 Final G11 status: **PASS**.
-Screenshot-retirement readiness: **PASS / SCREENSHOT_FREE_READY** for normal autonomous validation. Routine retirement is a readiness decision only; production activation remains blocked until explicit user approval. Diagnostic screenshots remain permitted as an anomaly fallback.
+Screenshot-retirement readiness: **PASS / SCREENSHOT_FREE_READY**. Under explicit user approval, routine screenshots are now retired for the validated production evidence windows; diagnostic screenshots remain permitted as an anomaly fallback.
 
-## Current-head regression state
+## Current production state
 
-Current experimental branch head before this documentation sync: `ce1ef468c84a75a524a439e2fd22a20eee825e2d` (`[g11] consolidate three same-session manual PASS runs`). CI run `35202612772` completed successfully. CI success does not imply production activation.
+Canonical `main` contains the merged V2.2.3 structured-evidence backbone and guarded production scheduler. First production evidence smoke: workflow `35309563909` — SUCCESS on 18 Sep 2026, run class `INTRADAY_SNAPSHOT`, evidence bundle `166bf25613447b593bd14b94a21f073f95815768df2c8ab695a1d30846939c92`. Immutable artifact `10533165774` uploaded successfully. Main regression CI `35309563911` — SUCCESS. Activation audit: `experiments/gate_records/V223_structured_production_activation_2026-09-18.json`.
 
 ## Core market-data proof retained
 
@@ -169,12 +171,14 @@ READY FOR CANONICAL/PRODUCTION CACHE ACTIVATION: NO — explicit user approval r
 - no canonical scoring, weight, probability, recommendation, efficacy or Learning Lab mutation.
 - no production 5DR/EDGE writes.
 - isolated Neon cache branch only; canonical Neon `main` unchanged.
-- PR #30 remains draft/unmerged.
+- PR #30 merged under explicit user approval. Upstox remains read-only and the production evidence workflow has no broker-order, account, funds or portfolio action surface.
 
 ## Current next gate
 
 1. G11 is complete PASS; do not reacquire or repeat Manual Runs 1–3 or the 18 Sep rollover.
-2. Post-G11 bounded backfill readiness, isolated persistence reconciliation and scheduler/watchdog readiness are complete PASS.
-3. Final GitHub + Drive audit is complete; approval pack: `experiments/gate_records/FINAL_preproduction_audit_2026-09-18.json`.
-4. Full 29-series historical backfill has NOT been run; it remains separately approval-gated if desired before/after activation.
-5. STOP HERE. Do not activate production structured-data runtime, canonical integration, forecast release, lifecycle writes, trading execution or PR #30 merge without explicit user approval.
+2. V2.2.3 structured evidence production is ACTIVE for the validated late-morning and prior-close windows.
+3. Validate the first scheduled 15:25 IST prior-close production evidence run on canonical `main`.
+4. Build and separately validate the PREOPEN carry-forward + overnight/global refresh path before enabling the 08:45–09:00 window.
+5. Automatic forecast publication/persistence remains disabled until a reusable exact-bundle-bound governed intelligence/release path is implemented without inventing methodology.
+6. Historical backfill/export work is owned by the parallel chat and must not be duplicated here.
+7. Trading remains disabled.
