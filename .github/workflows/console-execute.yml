@@ -44,19 +44,32 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          curl --location --fail-with-body --silent --show-error \
-            -H "Accept: application/json" \
-            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            "$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet" \
-            --output request.json
-          python - <<'PY'
+          ENDPOINT="$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/execution-packet"
+
+          fetch_packet() {
+            rm -f request.json
+            curl --location --fail-with-body --silent --show-error "$@" \
+              -H "Accept: application/json" \
+              "$ENDPOINT" \
+              --output request.json || return 1
+            python - <<'PY'
           import json
-          with open("request.json", "r", encoding="utf-8") as handle:
-              payload = json.load(handle)
+          try:
+              with open("request.json", "r", encoding="utf-8") as handle:
+                  payload = json.load(handle)
+          except Exception:
+              raise SystemExit(1)
           if not isinstance(payload, dict) or not isinstance(payload.get("evidence"), list):
-              raise SystemExit("EDGE Console execution packet is not a governed JSON object")
+              raise SystemExit(1)
           PY
+          }
+
+          if ! fetch_packet \
+              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"; then
+            echo "Authenticated preview fetch did not return governed JSON; retrying public preview path."
+            fetch_packet
+          fi
 
       - name: Execute governed 5DR engine
         run: python -m src.runner --input request.json --publish > envelope.json
@@ -67,13 +80,21 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          curl --location --fail-with-body --silent --show-error \
+          ENDPOINT="$CONSOLE_URL/api/5dr/runs"
+          if ! curl --location --fail-with-body --silent --show-error \
             -X POST \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             -H "Content-Type: application/json" \
             --data-binary @envelope.json \
-            "$CONSOLE_URL/api/5dr/runs"
+            "$ENDPOINT"; then
+            echo "Authenticated preview publish failed; retrying public preview path."
+            curl --location --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Content-Type: application/json" \
+              --data-binary @envelope.json \
+              "$ENDPOINT"
+          fi
 
       - name: Mark Console request failed
         if: failure()
@@ -84,10 +105,17 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           printf '%s' '{"error":"5DR Console Execute workflow failed before validated publication"}' > failure.json
-          curl --location --fail-with-body --silent --show-error \
+          ENDPOINT="$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/fail"
+          if ! curl --location --fail-with-body --silent --show-error \
             -X POST \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             -H "Content-Type: application/json" \
             --data-binary @failure.json \
-            "$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/fail" || true
+            "$ENDPOINT"; then
+            curl --location --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Content-Type: application/json" \
+              --data-binary @failure.json \
+              "$ENDPOINT" || true
+          fi
