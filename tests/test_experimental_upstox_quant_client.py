@@ -62,8 +62,10 @@ class QuantClientTests(unittest.TestCase):
     def test_intraday_ohlc_validation_fails_closed(self):
         bad = {"status": "success", "data": {"candles": [["2026-09-15T09:15:00+05:30", 100, 99, 90, 95, 1, 0]]}}
         client = QuantReadOnlyClient("secret-token", {NIFTY}, opener=QueueOpener([bad]), sleep=lambda _: None)
-        with self.assertRaises(PipelineError):
+        with self.assertRaises(PipelineError) as caught:
             client.intraday(NIFTY, "minutes", 15)
+        self.assertIn("index 0", str(caught.exception))
+        self.assertIn("Invalid OHLC geometry", str(caught.exception))
 
     def test_oi_identity_and_nonnegative_fields(self):
         payload = {"status": "success", "data": {"total_puts": 10, "total_calls": 20, "spot_closing_price": 25000, "expiry": "2026-09-22", "call_put_oi_data_list": [{"strike_price": 25000, "call_oi": 10, "put_oi": 20}]}}
