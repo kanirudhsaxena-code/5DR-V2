@@ -1,0 +1,76 @@
+{
+  "schema": "edge-stock-phase2b-acceptance-gate-v1",
+  "gate_id": "EDGE_STOCK_PHASE2B_2026-09-18",
+  "recorded_date": "2026-09-18",
+  "repository": "kanirudhsaxena-code/5DR-V2",
+  "validation_branch": "validation/edge-stock-full-acceptance",
+  "validated_head_sha": "19a0fa0674939e9dd6ae0afc12fa3dfe6327e2cf",
+  "status": "PASS",
+  "live_validation": {
+    "workflow": "EDGE Stocks Full Acceptance",
+    "run_id": 35317463057,
+    "conclusion": "success",
+    "artifact_id": 10535832353,
+    "artifact_zip_sha256": "80359af7c6deccf4a4dae7697c1839369f76b3866a6b48a1eab4fc361d556b2b",
+    "acceptance_gate_sha256": "c6afa586d797dbfaee932ca2a2b22ed9260808a36e100e5ab55c49c9fe4e9a29",
+    "shared_market_bundle_sha256": "37046c8785e3d1a552b15b24d414150d512884fa3e75186207509c140d782a87"
+  },
+  "representative_cases": {
+    "LTF": {
+      "symbol": "LTF",
+      "subject_id": "INE498L01015",
+      "fo_eligible": true,
+      "bundle_sha256": "43c8965f448c6948d2a628e78aeceeed6889825a2113d0a3667913fbc19d8138",
+      "required_variable_coverage": "PASS",
+      "provider_peer_gap": "RECOVERED_VIA_FALLBACK"
+    },
+    "LARGE_LIQUID_FO": {
+      "symbol": "RELIANCE",
+      "subject_id": "INE002A01018",
+      "fo_eligible": true,
+      "bundle_sha256": "5eafa44ef1121b480d94f62b62d9b6f800addfb513b9410873e6b697ff831ea2",
+      "required_variable_coverage": "PASS",
+      "provider_peer_gap": "RECOVERED_VIA_FALLBACK"
+    },
+    "NON_FO": {
+      "symbol": "TATVA",
+      "subject_id": "INE0GK401011",
+      "fo_eligible": false,
+      "bundle_sha256": "40f63c5804f2022b7011272ca1d399e8edba67a9b87cb7656428a0e581c19d2d",
+      "required_variable_coverage": "PASS",
+      "provider_peer_gap": "RECOVERED_VIA_FALLBACK"
+    }
+  },
+  "checks": {
+    "consumer_isolation": "PASS",
+    "subject_identity": "PASS",
+    "required_variable_coverage": "PASS",
+    "fo_conditionality": "PASS",
+    "screenshot_free": "PASS",
+    "provenance_integrity": "PASS",
+    "provider_read_only_boundary": "PASS",
+    "shared_macro_fact_binding": "PASS",
+    "peer_fallback_governance": "PASS",
+    "methodology_applied": false,
+    "recommendation_generated": false,
+    "forecast_release_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_enabled": false
+  },
+  "research_semantics": {
+    "bounded_validation_snapshot": true,
+    "allowed_statuses_used": ["COMPLETE", "VERIFIED_PARTIAL", "RECOVERED_VIA_FALLBACK"],
+    "conflicted_evidence_admitted": false,
+    "unavailable_evidence_admitted": false
+  },
+  "activation": {
+    "production_activated": false,
+    "production_activation_allowed_by_this_gate": false,
+    "requires_separate_activation_change": true
+  },
+  "notes": [
+    "Upstox competitors endpoint returned provider-unavailable for all three representative cases; STOCK_PEERS was recovered only through the governed fallback contract.",
+    "EDGE_STOCK shared macro consumed factual evidence from the live shared 5DR evidence bundle and did not consume 5DR scoring, probabilities or recommendation semantics.",
+    "This gate certifies the Phase 2B data backbone and representative full-bundle assembly only."
+  ]
+}
