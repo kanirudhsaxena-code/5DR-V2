@@ -6,6 +6,7 @@ from experiments.backfill_executor import BackfillExecutor, build_initial_backfi
 from experiments.backfill_inventory import SERIES
 from experiments.data_contract import DataArchitectureError
 from experiments.usage_ledger import UsageBudget
+from phase1.upstox import PipelineError
 
 
 class FakeProvider:
@@ -15,6 +16,14 @@ class FakeProvider:
         self.calls += 1
         return {"payload": {"data": {"candles": [["2026-09-15T09:15:00+05:30", 1, 1, 1, 1, 0, 0]]}},
                 "source_path": "/history", "sha256": "a" * 64, "received_at": "2026-09-16T00:00:00+00:00"}
+
+
+class FailingProvider:
+    def __init__(self):
+        self.calls = 0
+    def get_historical_candles(self, instrument_key, timeframe, start, end):
+        self.calls += 1
+        raise PipelineError("Candle validation failed at index 2: Invalid OHLC geometry")
 
 
 class FakeCache:
@@ -40,6 +49,21 @@ class BackfillIntegrityTests(unittest.TestCase):
                              budget=UsageBudget(max_calls=1, max_rows_retained=1000),
                              allow_network=True, allow_storage_writes=True).execute(plan, dry_run=False)
         self.assertEqual(provider.calls, 0)
+        self.assertEqual(cache.writes, 0)
+
+    def test_provider_validation_failure_is_bound_to_series_and_chunk(self):
+        plan = self._single_plan()
+        provider, cache = FailingProvider(), FakeCache()
+        with self.assertRaises(DataArchitectureError) as caught:
+            BackfillExecutor(provider=provider, cache=cache,
+                             budget=UsageBudget(max_calls=1, max_rows_retained=1000),
+                             allow_network=True, allow_storage_writes=True).execute(plan, dry_run=False)
+        message = str(caught.exception)
+        self.assertIn(plan["series"][0]["series_id"], message)
+        self.assertIn(plan["series"][0]["chunks"][0]["start"], message)
+        self.assertIn(plan["series"][0]["chunks"][0]["end"], message)
+        self.assertIn("index 2", message)
+        self.assertEqual(provider.calls, 1)
         self.assertEqual(cache.writes, 0)
 
     def test_single_chunk_execution_uses_exactly_one_provider_and_cache_call(self):
