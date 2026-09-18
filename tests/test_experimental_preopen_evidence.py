@@ -1,20 +1,29 @@
 import unittest
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from experiments.data_contract import DataArchitectureError, build_record
+from experiments.preopen_acquire import classify_preopen_window
 from experiments.preopen_evidence import (
     build_preopen_evidence_bundle,
     verify_preopen_evidence_bundle,
 )
+from experiments.web_context import build_web_context_item
 
 TARGET = "2026-09-18"
 PREVIOUS = "2026-09-17"
 FREEZE = datetime(2026, 9, 18, 3, 20, tzinfo=timezone.utc)
-SUBJECT = {
-    "kind": "MARKET_INSTRUMENT",
-    "id": "NIFTY50",
-    "name": "NIFTY 50",
-}
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def subject(variable_id):
+    ids = {
+        "NIFTY_PRICE_CANDLES": ("NIFTY_50", "NIFTY 50"),
+        "GLOBAL_RISK_INDICES": ("GLOBAL_RISK_INDICES", "Approved global risk indices"),
+        "CRUDE_USDINR": ("CRUDE_USDINR", "Crude and USD/INR"),
+    }
+    sid, name = ids[variable_id]
+    return {"kind": "MARKET_INSTRUMENT", "id": sid, "name": name}
 
 
 def record(variable_id, *, freshness="LIVE", provider_ts="2026-09-18T03:15:00+00:00",
@@ -24,7 +33,7 @@ def record(variable_id, *, freshness="LIVE", provider_ts="2026-09-18T03:15:00+00
         source_semantic="UPSTOX_AUTHENTICATED",
         variable_id=variable_id,
         consumer="5DR",
-        subject=SUBJECT,
+        subject=subject(variable_id),
         metric="TEST",
         values=values or {"value": 1},
         timeframe="quote",
@@ -47,15 +56,17 @@ def prior_close():
     )
 
 
-def external(category, suffix):
-    return {
-        "category": category,
-        "source_semantic": "OFFICIAL_WEB",
-        "source_reference": "https://example.invalid/" + category.lower(),
-        "source_sha256": suffix * 64,
-        "retrieved_at": "2026-09-18T03:18:00+00:00",
-        "validation_status": "VALID",
-    }
+def external(category, suffix, *, reference_suffix="1"):
+    return build_web_context_item(
+        category=category,
+        source_semantic="OFFICIAL_WEB",
+        source_reference=f"https://example.invalid/{category.lower()}/{reference_suffix}",
+        source_sha256=suffix * 64,
+        authority="TEST_AUTHORITY",
+        observed_at="2026-09-18T03:17:00+00:00",
+        retrieved_at="2026-09-18T03:18:00+00:00",
+        fact_summary=f"test {category}",
+    )
 
 
 def build(**overrides):
@@ -70,6 +81,7 @@ def build(**overrides):
         ],
         external_evidence=[
             external("DXY_RATES", "e"),
+            external("DXY_RATES", "1", reference_suffix="2"),
             external("MACRO_EVENTS_GEOPOLITICS", "f"),
         ],
         active_expiry="2026-09-22",
@@ -80,14 +92,28 @@ def build(**overrides):
 
 
 class PreopenEvidenceTests(unittest.TestCase):
+    def test_preopen_window_is_exact_and_weekday_only(self):
+        row = classify_preopen_window(datetime(2026, 9, 18, 8, 50, tzinfo=IST))
+        self.assertEqual(row["label"], "PREOPEN")
+        with self.assertRaises(DataArchitectureError):
+            classify_preopen_window(datetime(2026, 9, 18, 9, 0, tzinfo=IST))
+        with self.assertRaises(DataArchitectureError):
+            classify_preopen_window(datetime(2026, 9, 19, 8, 50, tzinfo=IST))
+
     def test_complete_preopen_bundle_is_ready_and_side_effect_free(self):
         bundle = build()
         self.assertEqual(bundle["status"], "READY")
         self.assertEqual(bundle["run_key"], "5DR:2026-09-18:PREOPEN")
+        self.assertEqual(bundle["namespace"], "5DR:NIFTY_50")
         self.assertFalse(bundle["side_effects"]["forecast_release_enabled"])
         self.assertFalse(bundle["side_effects"]["trading_enabled"])
         verified = verify_preopen_evidence_bundle(bundle)
         self.assertEqual(verified["bundle_sha256"], bundle["bundle_sha256"])
+
+    def test_multiple_sources_in_same_external_category_are_allowed(self):
+        bundle = build()
+        dxy = [x for x in bundle["external_evidence"] if x["category"] == "DXY_RATES"]
+        self.assertEqual(len(dxy), 2)
 
     def test_stale_prior_session_close_rejected(self):
         bad = prior_close()
@@ -134,6 +160,12 @@ class PreopenEvidenceTests(unittest.TestCase):
     def test_cross_consumer_contamination_rejected(self):
         bad = record("GLOBAL_RISK_INDICES", suffix="c")
         bad["consumer"] = "EDGE_STOCK"
+        with self.assertRaises(DataArchitectureError):
+            build(overnight_records=[bad, record("CRUDE_USDINR", suffix="d")])
+
+    def test_wrong_subject_identity_rejected(self):
+        bad = record("GLOBAL_RISK_INDICES", suffix="c")
+        bad["subject"]["id"] = "NIFTY_50"
         with self.assertRaises(DataArchitectureError):
             build(overnight_records=[bad, record("CRUDE_USDINR", suffix="d")])
 
