@@ -6,3 +6,4 @@ triggered_at_ist=2026-09-18T10:07:10+05:30
 production_activation=false
 pr30_merge=false
 retry=1
+retry=2
