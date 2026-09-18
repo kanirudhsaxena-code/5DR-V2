@@ -125,7 +125,30 @@ def main():
     )
     plan = build_initial_backfill_plan(as_of, budget=budget)
     approved = {row["instrument_key"] for row in SERIES}
-    provider = UpstoxAdapter(QuantReadOnlyClient(token, approved))
+    base_provider = UpstoxAdapter(QuantReadOnlyClient(token, approved))
+
+    class TracingProvider:
+        def get_historical_candles(self, instrument_key, timeframe, start, end):
+            marker = {
+                "event": "BACKFILL_CHUNK_START",
+                "instrument_key": instrument_key,
+                "timeframe": timeframe,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            }
+            print(json.dumps(marker, sort_keys=True, separators=(",", ":")), flush=True)
+            envelope = base_provider.get_historical_candles(
+                instrument_key, timeframe, start, end
+            )
+            rows = envelope.get("payload", {}).get("data", {}).get("candles", [])
+            print(json.dumps({
+                **marker,
+                "event": "BACKFILL_CHUNK_PASS",
+                "rows": len(rows),
+            }, sort_keys=True, separators=(",", ":")), flush=True)
+            return envelope
+
+    provider = TracingProvider()
     cache = ArtifactDocumentCache(as_of=as_of)
     result = BackfillExecutor(
         provider=provider,
