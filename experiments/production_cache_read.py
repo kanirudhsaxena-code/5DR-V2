@@ -109,6 +109,7 @@ class ProductionHistoricalCacheReader:
             "latest_session_date": latest.isoformat(),
             "covers_required_window": earliest <= start and latest >= end,
             "audit_event_count": len(document["audit_events"]),
+            "records": records,
         }
 
 
