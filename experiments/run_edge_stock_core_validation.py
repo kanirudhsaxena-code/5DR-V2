@@ -76,6 +76,8 @@ def run():
             "nearest_expiry":core["fo_identity"]["nearest_expiry"],
             "benchmark":benchmark,
             "variables":variables,
+            "provider_gaps":core.get("provider_gaps", []),
+            "provider_coverage_status":"COMPLETE" if not core.get("provider_gaps") else "VERIFIED_PARTIAL",
             "read_only":core["read_only"],
             "methodology_applied":core["methodology_applied"],
             "trading_enabled":core["trading_enabled"],
