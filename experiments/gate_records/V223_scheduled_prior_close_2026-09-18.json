@@ -1,0 +1,57 @@
+{
+  "schema": "v223-structured-production-prior-close-audit-v1",
+  "audit_date": "2026-09-18",
+  "status": "PASS",
+  "repository": "kanirudhsaxena-code/5DR-V2",
+  "branch": "main",
+  "workflow": ".github/workflows/5dr-structured-production.yml",
+  "workflow_run_id": 35332448007,
+  "workflow_event": "schedule",
+  "workflow_conclusion": "success",
+  "workflow_started_at": "2026-09-18T10:00:16Z",
+  "scheduled_window_ist": "15:25",
+  "head_sha": "c2aaaf53e09fb6825c3e3fee4992b66c8cb6f64d",
+  "label": "PRIOR_CLOSE_REFRESH",
+  "run_class": "CANONICAL_CANDIDATE",
+  "production_evidence_status": "PRODUCTION_EVIDENCE_READY",
+  "bundle_status": "READY",
+  "bundle_run_id": "V223-SHADOW-20260918T100107Z",
+  "bundle_sha256": "c2c2c14287ba971fa29413db1b37e42b25f56cfb1a41bc9e54b37df4e3939145",
+  "screenshot_policy": {
+    "require_screenshot_free": true,
+    "screenshot_dependency": false,
+    "screenshot_semantics": []
+  },
+  "artifact": {
+    "id": 10541217566,
+    "name": "5dr-production-evidence-2026-09-18-PRIOR_CLOSE_REFRESH-c2c2c14287ba971fa29413db1b37e42b25f56cfb1a41bc9e54b37df4e3939145",
+    "size_bytes": 35808,
+    "digest": "sha256:88c5bf924c3e9c98591e371c6131345df34826bf336a05b70b48b7e9d7f68a3d",
+    "expired": false,
+    "upload_verified": true
+  },
+  "safety": {
+    "forecast_release_enabled": false,
+    "production_5dr_write_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "methodology_changed": false,
+    "upstox_read_only": true,
+    "broker_order_surface_present": false,
+    "account_funds_portfolio_action_surface_present": false
+  },
+  "verification": {
+    "scheduled_run_on_canonical_main": "PASS",
+    "workflow_success": "PASS",
+    "prior_close_label": "PASS",
+    "canonical_candidate_run_class": "PASS",
+    "ready_bundle": "PASS",
+    "screenshot_free": "PASS",
+    "immutable_artifact_upload": "PASS",
+    "side_effect_isolation": "PASS",
+    "methodology_unchanged": "PASS",
+    "upstox_read_only_boundary": "PASS"
+  },
+  "backfill_boundary": "29-series historical backfill not touched by this audit",
+  "notes": "First scheduled 15:25 IST V2.2.3 prior-close structured production evidence run verified PASS. This audit authorizes no forecast publication, canonical forecast write, lifecycle write, trading, methodology change, or production-cache promotion."
+}
