@@ -1,0 +1,67 @@
+{
+  "schema": "5dr-v2-2-3-gate-record-v1",
+  "gate": "G7_FULL_29_SERIES_HISTORICAL_CACHE",
+  "status": "PASS_ISOLATED_CACHE_READY",
+  "date": "2026-09-18",
+  "initial_backfill": {
+    "workflow_run_id": 35309279223,
+    "status": "PASS",
+    "series_count": 29,
+    "provider_calls": 90,
+    "final_unique_records": 49819,
+    "billable_units": 0,
+    "artifact_digest": "sha256:2cb0432635a8deab71eff4c75abeb3ad8d614e4601fe929d7b6e2c5ef0898f82",
+    "quarantined_provider_rows": 2,
+    "quarantine_policy": "EXACT_PROVIDER_ANOMALY_QUARANTINE_NO_REPAIR_NO_SILENT_DROP",
+    "quarantined_examples": [
+      "GIFT_NIFTY 1d 2026-07-19 open_above_high",
+      "WTI 1d 2026-06-18 close_above_high"
+    ]
+  },
+  "incremental_refresh_proof": {
+    "workflow_run_id": 35312636839,
+    "status": "PASS",
+    "series_count": 29,
+    "initial_backfill_calls": 90,
+    "incremental_calls": 29,
+    "tail_window": "2026-09-17..2026-09-18",
+    "rows_received": 278,
+    "duplicates_deduplicated": 275,
+    "provider_corrections": 3,
+    "retention_pruned": 0,
+    "billable_units": 0,
+    "artifact_digest": "sha256:53af1b29d90e91bf33a5d8daa3a1b9aab340471b6ba53e0054d77980a5118622",
+    "corrected_series": [
+      "5DR:GLOBAL_RISK_INDICES:GIFT_NIFTY:1h",
+      "5DR:CRUDE_USDINR:BRENT:1h",
+      "5DR:CRUDE_USDINR:WTI:1h"
+    ]
+  },
+  "isolated_neon": {
+    "project_id": "flat-fire-21633692",
+    "branch_id": "br-gentle-math-aybvyzt5",
+    "branch_name": "market-data-cache-v223-experiment",
+    "database": "five_dr",
+    "table": "market_data_cache.market_cache_documents",
+    "series_count": 29,
+    "total_records": 49819,
+    "integrity_pass_count": 29,
+    "provider_correction_audit_events": 3
+  },
+  "canonical_neon": {
+    "main_branch_id": "br-sweet-queen-aysaf1mw",
+    "cache_table_present": false,
+    "cache_writes_performed": false
+  },
+  "production_context_observed_during_final_audit": {
+    "pr30_merged": true,
+    "merge_commit": "7972d660078d28d0631f822e21cb1fc6b495776b",
+    "activation_pr37_reported_merged_in_main_status": true,
+    "structured_evidence_runtime_active": true,
+    "forecast_publication_enabled": false,
+    "lifecycle_write_enabled": false,
+    "trading_execution_enabled": false,
+    "cache_attached_to_production": false
+  },
+  "next": "READ_THROUGH_CACHE_SHADOW_AGAINST_ACTIVE_STRUCTURED_RUNTIME_BEFORE_ANY_PRODUCTION_CACHE_ATTACHMENT"
+}
