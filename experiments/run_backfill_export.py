@@ -19,6 +19,7 @@ from experiments.data_contract import DataArchitectureError
 from experiments.upstox_adapter import UpstoxAdapter
 from experiments.upstox_quant_client import QuantReadOnlyClient
 from experiments.upstox_endpoints import historical_path
+from experiments.upstox_quality import validate_ohlc
 from experiments.usage_ledger import UsageBudget
 
 OUTPUT_DIR = Path(".shadow/backfill_export")
@@ -130,6 +131,38 @@ def main():
     base_provider = UpstoxAdapter(raw_client)
 
     class TracingProvider:
+        KNOWN_QUARANTINE = {
+            "instrument_key": "GLOBAL_INDEX|SGX NIFTY",
+            "timeframe": "1d",
+            "timestamp": "2026-07-19T00:00:00+05:30",
+            "open": 24373.5,
+            "high": 24371.5,
+            "low": 24092.0,
+            "close": 24125.0,
+            "volume": 0,
+            "open_interest": 0,
+        }
+
+        def __init__(self):
+            self.quarantines = []
+
+        @staticmethod
+        def _matches_known_quarantine(instrument_key, timeframe, row):
+            if not isinstance(row, list) or len(row) != 7:
+                return False
+            expected = TracingProvider.KNOWN_QUARANTINE
+            return (
+                instrument_key == expected["instrument_key"]
+                and timeframe == expected["timeframe"]
+                and row[0] == expected["timestamp"]
+                and row[1] == expected["open"]
+                and row[2] == expected["high"]
+                and row[3] == expected["low"]
+                and row[4] == expected["close"]
+                and row[5] == expected["volume"]
+                and row[6] == expected["open_interest"]
+            )
+
         def get_historical_candles(self, instrument_key, timeframe, start, end):
             marker = {
                 "event": "BACKFILL_CHUNK_START",
@@ -139,45 +172,58 @@ def main():
                 "end": end.isoformat(),
             }
             print(json.dumps(marker, sort_keys=True, separators=(",", ":")), flush=True)
-            try:
+
+            # One exact provider anomaly was discovered during fail-closed export diagnosis:
+            # SGX/GIFT Nifty daily 2026-07-19 reports open > high by 2 points. For this
+            # one series we fetch the same authenticated raw endpoint, validate every row
+            # individually, and quarantine only the exact known fingerprint. Any other
+            # malformed row fails closed. Core provider validation is not relaxed.
+            if instrument_key == "GLOBAL_INDEX|SGX NIFTY" and timeframe == "1d":
+                unit, interval = UpstoxAdapter._HISTORICAL_TIMEFRAMES[timeframe]
+                path = historical_path(
+                    instrument_key, unit, interval, start=start, end=end, intraday=False
+                )
+                envelope = raw_client._get(path)
+                raw_rows = envelope.get("payload", {}).get("data", {}).get("candles", [])
+                if not isinstance(raw_rows, list) or not raw_rows:
+                    raise DataArchitectureError("GIFT Nifty daily raw candle array missing")
+                valid_rows = []
+                for row in raw_rows:
+                    try:
+                        if not isinstance(row, list) or len(row) != 7:
+                            raise DataArchitectureError("daily candle shape invalid")
+                        stamp = datetime.fromisoformat(row[0])
+                        if stamp.tzinfo is None:
+                            raise DataArchitectureError("daily candle timestamp naive")
+                        validate_ohlc(
+                            row[1], row[2], row[3], row[4],
+                            volume=row[5], open_interest=row[6],
+                        )
+                        valid_rows.append(row)
+                    except Exception:
+                        if not self._matches_known_quarantine(instrument_key, timeframe, row):
+                            raise
+                        quarantine = {
+                            **self.KNOWN_QUARANTINE,
+                            "reason": "PROVIDER_INVALID_OHLC_OPEN_ABOVE_HIGH",
+                            "source_sha256": envelope.get("sha256"),
+                            "action": "QUARANTINED_NOT_CACHED",
+                        }
+                        self.quarantines.append(quarantine)
+                        print(json.dumps({
+                            **marker,
+                            "event": "BACKFILL_ROW_QUARANTINED",
+                            "quarantine": quarantine,
+                        }, sort_keys=True, separators=(",", ":")), flush=True)
+                if len(self.quarantines) != 1:
+                    raise DataArchitectureError("known GIFT Nifty quarantine count mismatch")
+                envelope["payload"]["data"]["candles"] = valid_rows
+                envelope["validated_candles"] = len(valid_rows)
+            else:
                 envelope = base_provider.get_historical_candles(
                     instrument_key, timeframe, start, end
                 )
-            except Exception as exc:
-                if "Invalid OHLC geometry" in str(exc):
-                    unit, interval = UpstoxAdapter._HISTORICAL_TIMEFRAMES[timeframe]
-                    path = historical_path(
-                        instrument_key, unit, interval, start=start, end=end, intraday=False
-                    )
-                    raw = raw_client._get(path)
-                    rows = raw.get("payload", {}).get("data", {}).get("candles", [])
-                    bad = []
-                    for row in rows:
-                        if not isinstance(row, list) or len(row) != 7:
-                            bad.append({"row": row, "reason": "shape"})
-                            continue
-                        try:
-                            o, h, l, close = map(float, row[1:5])
-                            valid = l <= min(o, close) <= max(o, close) <= h and min(o, h, l, close) > 0
-                        except (TypeError, ValueError):
-                            valid = False
-                        if not valid:
-                            bad.append({
-                                "timestamp": row[0],
-                                "open": row[1],
-                                "high": row[2],
-                                "low": row[3],
-                                "close": row[4],
-                                "volume": row[5],
-                                "open_interest": row[6],
-                            })
-                    print(json.dumps({
-                        **marker,
-                        "event": "BACKFILL_OHLC_DIAGNOSTIC",
-                        "invalid_row_count": len(bad),
-                        "invalid_rows": bad[:20],
-                    }, sort_keys=True, separators=(",", ":")), flush=True)
-                raise
+
             rows = envelope.get("payload", {}).get("data", {}).get("candles", [])
             print(json.dumps({
                 **marker,
@@ -196,6 +242,16 @@ def main():
         allow_storage_writes=True,
     ).execute(plan, dry_run=False)
     manifest = cache.export(plan, result)
+    manifest["quarantined_provider_rows"] = provider.quarantines
+    manifest["quarantined_provider_row_count"] = len(provider.quarantines)
+    manifest["status"] = (
+        "BACKFILL_EXPORT_COMPLETE_WITH_EXACT_QUARANTINE"
+        if provider.quarantines else "BACKFILL_EXPORT_COMPLETE"
+    )
+    MANIFEST_FILE.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
     print(json.dumps(manifest, sort_keys=True, separators=(",", ":")))
     return 0
 
