@@ -74,8 +74,9 @@ class _IndustryParser(HTMLParser):
         if tag == "a" and self.current_href is not None:
             href = self.current_href or ""
             text = " ".join(self.current_text).strip()
-            if re.fullmatch(r"/company/[A-Z0-9_.-]+/?", href) and text:
-                symbol = href.rstrip("/").split("/")[-1]
+            match = re.fullmatch(r"/company/([A-Z0-9_.-]+)(?:/consolidated)?/?", href)
+            if match and text:
+                symbol = match.group(1)
                 self.companies.append({"symbol": symbol, "name": text})
             self.current_href = None
             self.current_text = []
