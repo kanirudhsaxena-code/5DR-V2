@@ -76,7 +76,7 @@ jobs:
           printf '%s\n' '{"mode":"NO_WRITE","writes_enabled":false,"reason":"NO_EVIDENCE_HANDOFF","database_connection":"CONFIGURED_VIA_SECRET"}' > activation-audit.json
       - name: Publish latest cumulative assessment to EDGE Console
         env:
-          EDGE_CONSOLE_URL: https://sole.k-anirudhsaxena.workers.dev
+          EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
         run: |
           python - <<'PY'
           import json, os, urllib.request
@@ -103,14 +103,56 @@ jobs:
                           forecast_id,event_type,pnl_pct,event_timestamp
                         FROM recommendation_events
                         WHERE event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
-                        ORDER BY forecast_id,event_timestamp DESC
+                        ORDER BY forecast_id,event_timestamp DESC,event_id DESC
                       )
                       SELECT COALESCE(SUM(pnl_pct),0),
-                             COALESCE(SUM(pnl_pct) FILTER (WHERE pnl_pct>0),0),
-                             COALESCE(SUM(pnl_pct) FILTER (WHERE pnl_pct<0),0)
+                             COALESCE(SUM(pnl_pct) FILTER (WHERE event_type='T2_HIT'),0),
+                             COALESCE(SUM(pnl_pct) FILTER (WHERE event_type<>'T2_HIT'),0)
                       FROM terminal
                   """)
                   cumulative, hits_return, misses_return = cur.fetchone()
+                  cur.execute("""
+                      WITH issued AS (
+                        SELECT forecast_id, MIN(event_timestamp) FILTER (WHERE event_type='ISSUED') AS issued_at
+                        FROM recommendation_events
+                        GROUP BY forecast_id
+                      ),
+                      terminal AS (
+                        SELECT DISTINCT ON (forecast_id)
+                          forecast_id,event_type,event_timestamp,pnl_pct
+                        FROM recommendation_events
+                        WHERE event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+                        ORDER BY forecast_id,event_timestamp DESC,event_id DESC
+                      ),
+                      resolved AS (
+                        SELECT t.*, i.issued_at,
+                               (
+                                 SELECT COUNT(*)
+                                 FROM (
+                                   SELECT DISTINCT target_trading_date
+                                   FROM canonical_selections
+                                   WHERE selection_status='SELECTED'
+                                 ) d
+                                 WHERE d.target_trading_date > (i.issued_at AT TIME ZONE 'Asia/Kolkata')::date
+                                   AND d.target_trading_date <= (t.event_timestamp AT TIME ZONE 'Asia/Kolkata')::date
+                               )::int AS day_number
+                        FROM terminal t
+                        JOIN issued i USING (forecast_id)
+                      )
+                      SELECT day_number,
+                             COUNT(*) AS resolved,
+                             COUNT(*) FILTER (WHERE event_type='T2_HIT') AS hits,
+                             COUNT(*) FILTER (WHERE event_type<>'T2_HIT') AS misses,
+                             ROUND(100.0*COUNT(*) FILTER (WHERE event_type='T2_HIT')/NULLIF(COUNT(*),0),2) AS hit_rate_pct,
+                             ROUND(SUM(pnl_pct),4) AS overall_pnl_pct,
+                             ROUND(SUM(pnl_pct) FILTER (WHERE event_type='T2_HIT'),4) AS hit_pnl_pct,
+                             ROUND(SUM(pnl_pct) FILTER (WHERE event_type<>'T2_HIT'),4) AS miss_pnl_pct
+                      FROM resolved
+                      WHERE day_number BETWEEN 1 AND 5
+                      GROUP BY day_number
+                      ORDER BY day_number
+                  """)
+                  day_recommendation_rows = cur.fetchall()
           finally:
               conn.close()
 
@@ -118,6 +160,21 @@ jobs:
               "overall_forecast_metrics": overall or {},
               "day_metrics": day_metrics or {},
               "recommendation_metrics": rec or {},
+              "day_recommendation_metrics": {
+                  **{f"D+{d}": {
+                      "resolved": 0, "hits": 0, "misses": 0, "hit_rate_pct": None,
+                      "overall_pnl_pct": None, "hit_pnl_pct": None, "miss_pnl_pct": None,
+                  } for d in range(1, 6)},
+                  **{f"D+{int(day_number)}": {
+                      "resolved": int(resolved_count),
+                      "hits": int(hit_count),
+                      "misses": int(miss_count),
+                      "hit_rate_pct": float(hit_rate) if hit_rate is not None else None,
+                      "overall_pnl_pct": float(overall_pnl) if overall_pnl is not None else None,
+                      "hit_pnl_pct": float(hit_pnl) if hit_pnl is not None else None,
+                      "miss_pnl_pct": float(miss_pnl) if miss_pnl is not None else None,
+                  } for day_number, resolved_count, hit_count, miss_count, hit_rate, overall_pnl, hit_pnl, miss_pnl in day_recommendation_rows}
+              },
               "return_metrics": {
                   "cumulative_resolved_pnl_pct": float(cumulative or 0),
                   "hit_pnl_pct": float(hits_return or 0),
