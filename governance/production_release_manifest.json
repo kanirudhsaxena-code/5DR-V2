@@ -1,0 +1,22 @@
+{
+  "manifest_version": "1.0",
+  "consumer": "5DR",
+  "master_spec": {
+    "source": "GOOGLE_DRIVE",
+    "file_id": "1bXpByuaDvBSE8caviNxROOl5OhHraTHRo77FX6tw41U",
+    "title": "5DR V2.2.3 - CANONICAL SPECIFICATION",
+    "canonical_spec_version": "5DR V2.2.3",
+    "modified_at": "2026-09-18T19:00:33.593Z",
+    "content_sha256_lf": "c0aaad1e965cecd7c383bbcecc7852b7b3fdeee45414f7d06e53f07d756fa9aa",
+    "hash_normalization": "CRLF_TO_LF"
+  },
+  "production_binding": {
+    "model_version": "5DR_V2_1",
+    "output_contract_version": "5DR_V2_1_2",
+    "methodology_status": "FROZEN_UNCHANGED",
+    "structured_evidence_status": "PRODUCTION_ACTIVE",
+    "screenshot_policy": "FALLBACK_ONLY"
+  },
+  "binding_status": "BOUND",
+  "governance_note": "V2.2.3 explicitly preserves production model 5DR_V2_1 and output contract 5DR_V2_1_2."
+}
