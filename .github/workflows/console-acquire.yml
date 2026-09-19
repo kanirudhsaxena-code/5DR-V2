@@ -1,0 +1,68 @@
+name: 5DR Console Automated Evidence
+run-name: 5DR Automated Evidence · ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Governed EDGE Console request ID
+        required: true
+        type: string
+      console_url:
+        description: EDGE Console base URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 5dr-console-acquire-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout canonical engine
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install guarded cache database driver
+        run: python -m pip install --disable-pip-version-check 'psycopg[binary]>=3.2,<4'
+
+      - name: Validate acquisition bridge
+        run: python -m unittest tests.test_console_automated_evidence -v
+
+      - name: Acquire bounded automated market evidence
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          FIVE_DR_HISTORICAL_CACHE_MODE: CACHE_FIRST
+        run: >-
+          python -m experiments.console_automated_evidence
+          --request-id "${{ inputs.request_id }}"
+          --output console_market_evidence.json
+
+      - name: Publish bounded evidence to EDGE Console
+        env:
+          CONSOLE_URL: ${{ inputs.console_url }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          ENDPOINT="$CONSOLE_URL/api/5dr/run-requests/$REQUEST_ID/automated-market-evidence"
+          curl --location --fail-with-body --silent --show-error             -X POST             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID"             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"             -H "Content-Type: application/json"             --data-binary @console_market_evidence.json             "$ENDPOINT"
+
+      - name: Upload bounded acquisition artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5dr-console-market-evidence-${{ inputs.request_id }}
+          path: console_market_evidence.json
+          retention-days: 30
+          if-no-files-found: error
