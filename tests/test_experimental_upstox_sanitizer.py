@@ -54,6 +54,7 @@ class ExperimentalSanitizerTests(unittest.TestCase):
         self.assertEqual(result["selected_expiry"], "2026-09-22")
         self.assertEqual(result["underlying_spot_price"], 25110)
         self.assertEqual(result["latest_intraday_candle"]["timestamp"], "2026-09-15T15:29:00+05:30")
+        self.assertEqual(result["intraday_availability"], "AVAILABLE")
         self.assertEqual(len(result["sample_strikes"]), 5)
         serialized = repr(result).lower()
         self.assertNotIn("authorization", serialized)
@@ -62,6 +63,27 @@ class ExperimentalSanitizerTests(unittest.TestCase):
         for row in result["sample_strikes"]:
             self.assertTrue(row["CE"]["instrument_key"].startswith("NSE_FO|C"))
             self.assertTrue(row["PE"]["instrument_key"].startswith("NSE_FO|P"))
+
+    def test_empty_intraday_still_fails_closed_by_default(self):
+        contracts, intraday, chain = fixtures()
+        intraday["payload"]["data"]["candles"] = []
+        with self.assertRaises(PipelineError):
+            sanitize_live_envelopes(contracts, intraday, chain, date(2026, 9, 15))
+
+    def test_verified_closed_session_can_mark_intraday_unavailable(self):
+        contracts, intraday, chain = fixtures()
+        intraday["payload"]["data"]["candles"] = []
+        result = sanitize_live_envelopes(
+            contracts,
+            intraday,
+            chain,
+            date(2026, 9, 15),
+            allow_empty_intraday=True,
+        )
+        self.assertIsNone(result["latest_intraday_candle"])
+        self.assertEqual(result["intraday_availability"], "UNAVAILABLE_MARKET_CLOSED")
+        self.assertEqual(result["underlying_spot_price"], 25110)
+        self.assertEqual(len(result["sample_strikes"]), 5)
 
     def test_contract_side_mismatch_fails_closed(self):
         contracts, intraday, chain = fixtures()
