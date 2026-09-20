@@ -27,7 +27,7 @@ def _number(value, field):
     return int(result) if result == result.to_integral() else float(result)
 
 
-def sanitize_live_envelopes(contracts, intraday, chain, today: date, selected_expiry=None):
+def sanitize_live_envelopes(contracts, intraday, chain, today: date, selected_expiry=None, allow_empty_intraday=False):
     rows = contracts["payload"]["data"]
     if not isinstance(rows, list) or not rows:
         raise PipelineError("Contract array missing")
@@ -58,9 +58,9 @@ def sanitize_live_envelopes(contracts, intraday, chain, today: date, selected_ex
 
     validate_candles(intraday)
     candle_rows = intraday["payload"]["data"]["candles"]
-    if not candle_rows:
+    if not candle_rows and not allow_empty_intraday:
         raise PipelineError("Intraday candles empty")
-    latest = max(candle_rows, key=lambda row: datetime.fromisoformat(row[0]))
+    latest = max(candle_rows, key=lambda row: datetime.fromisoformat(row[0])) if candle_rows else None
 
     chain_rows = chain["payload"]["data"]
     if not isinstance(chain_rows, list) or not chain_rows:
@@ -120,11 +120,12 @@ def sanitize_live_envelopes(contracts, intraday, chain, today: date, selected_ex
         "available_expiries": sorted(expiries)[:8],
         "selected_expiry": selected_expiry,
         "underlying_spot_price": _number(spot, "underlying spot"),
-        "latest_intraday_candle": {
+        "latest_intraday_candle": None if latest is None else {
             "timestamp": latest[0], "open": latest[1], "high": latest[2],
             "low": latest[3], "close": latest[4], "volume": latest[5],
             "open_interest": latest[6],
         },
+        "intraday_availability": "UNAVAILABLE_MARKET_CLOSED" if latest is None else "AVAILABLE",
         "sample_strikes": sample,
         "provenance": {
             "contracts": {"source_path": contracts["source_path"], "sha256": contracts["sha256"], "received_at": contracts["received_at"]},
