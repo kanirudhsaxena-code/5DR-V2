@@ -1,6 +1,9 @@
 import unittest
 
+from datetime import date
+
 from experiments.run_upstox_quant_probe import _prove_global_live
+from experiments.live_shadow_bundle import _global_indicator_snapshot
 from phase1.upstox import PipelineError
 
 
@@ -35,3 +38,61 @@ class GlobalStrategyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IndicatorClient:
+    def __init__(self, *, intraday_error=None):
+        self.intraday_error=intraday_error
+        self.calls=[]
+
+    def intraday(self, key, unit, interval):
+        self.calls.append(("intraday",key,unit,interval))
+        if self.intraday_error:
+            raise PipelineError(self.intraday_error)
+        return {
+            "payload":{"data":{"candles":[
+                ["2026-09-18T10:00:00+00:00",100,102,99,101,50,0]
+            ]}},
+            "sha256":"a"*64,
+        }
+
+    def historical(self, key, unit, interval, start, end):
+        self.calls.append(("historical",key,unit,interval,start,end))
+        return {
+            "payload":{"data":{"candles":[
+                ["2026-09-18T00:00:00+00:00",98,103,97,100,70,0]
+            ]}},
+            "sha256":"b"*64,
+        }
+
+
+def test_closed_global_indicator_uses_authenticated_daily_carry_forward():
+    client=IndicatorClient(intraday_error="Candle array missing")
+    snap, env=_global_indicator_snapshot(
+        client,"GLOBAL_INDICATOR|BZUSD",date(2026,9,20),"NORMAL_CLOSE"
+    )
+    assert snap["last_price"]==100
+    assert snap["snapshot_basis"]=="UPSTOX_DAILY_MARKET_CLOSED_CARRY_FORWARD"
+    assert client.calls[0][0]=="intraday"
+    assert client.calls[1][0]=="historical"
+    assert env["sha256"]=="b"*64
+
+
+def test_open_global_indicator_empty_intraday_still_fails_closed():
+    client=IndicatorClient(intraday_error="Candle array missing")
+    with unittest.TestCase().assertRaises(PipelineError):
+        _global_indicator_snapshot(
+            client,"GLOBAL_INDICATOR|BZUSD",date(2026,9,20),"NORMAL_OPEN"
+        )
+    assert [call[0] for call in client.calls]==["intraday"]
+
+
+def test_available_global_intraday_remains_primary():
+    client=IndicatorClient()
+    snap, env=_global_indicator_snapshot(
+        client,"GLOBAL_INDICATOR|BZUSD",date(2026,9,20),"NORMAL_CLOSE"
+    )
+    assert snap["last_price"]==101
+    assert snap["snapshot_basis"]=="UPSTOX_INTRADAY_1M"
+    assert [call[0] for call in client.calls]==["intraday"]
+    assert env["sha256"]=="a"*64

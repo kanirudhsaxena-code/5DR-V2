@@ -214,6 +214,40 @@ def _historical_window(client, cache_reader, cache_mode, timeframe, unit, interv
     return env["payload"]["data"]["candles"], [env["sha256"]], audit
 
 
+def _global_indicator_snapshot(client, instrument_key, today, market_status):
+    """Read a global indicator without fabricating weekend intraday evidence.
+
+    Intraday remains primary. On a verified closed NFO session only, an empty
+    Upstox intraday candle response may fall back to the latest authenticated
+    daily candle from the preceding ten calendar days. The returned timestamp
+    remains the provider candle timestamp and is therefore classified by the
+    existing freshness rules rather than upgraded to LIVE.
+    """
+    try:
+        env = client.intraday(instrument_key, "minutes", 1)
+        rows = env["payload"]["data"]["candles"]
+        latest = max(rows, key=lambda row: _stamp(row[0]))
+        basis = "UPSTOX_INTRADAY_1M"
+    except PipelineError as error:
+        if market_status not in CLOSED_STATUSES or str(error) != "Candle array missing":
+            raise
+        end = today - timedelta(days=1)
+        start = today - timedelta(days=10)
+        env = client.historical(instrument_key, "days", 1, start, end)
+        rows = env["payload"]["data"]["candles"]
+        latest = max(rows, key=lambda row: _stamp(row[0]))
+        basis = "UPSTOX_DAILY_MARKET_CLOSED_CARRY_FORWARD"
+    return {
+        "last_price": latest[4],
+        "volume": latest[5],
+        "open_interest": latest[6],
+        "previous_close": None,
+        "change_pct_vs_previous_close": None,
+        "timestamp": _stamp(latest[0]).isoformat(),
+        "snapshot_basis": basis,
+    }, env
+
+
 def _subject(subject_id, name, *, instrument_key=None, segment=None):
     result = {"kind": "MARKET_INSTRUMENT", "id": subject_id, "name": name}
     if instrument_key:
@@ -495,16 +529,9 @@ def build_live_shadow_bundle(token):
             env = client.full_quotes([key])
             snap = _quote_snapshot(_quote_map(env)[key])
         else:
-            env = client.intraday(key, "minutes", 1)
-            latest = max(env["payload"]["data"]["candles"], key=lambda row: _stamp(row[0]))
-            snap = {
-                "last_price": latest[4],
-                "volume": latest[5],
-                "open_interest": latest[6],
-                "previous_close": None,
-                "change_pct_vs_previous_close": None,
-                "timestamp": _stamp(latest[0]).isoformat(),
-            }
+            snap, env = _global_indicator_snapshot(
+                client, key, today, market_status["status"]
+            )
         latency = identity["provider_latency"]
         global_values[target] = {
             **snap,
