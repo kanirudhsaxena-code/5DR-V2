@@ -26,7 +26,7 @@ from experiments.upstox_instruments import resolve_global_instruments, resolve_n
 from experiments.upstox_quality import classify_timestamp_freshness
 from experiments.upstox_quant_client import INDIA_VIX, QuantReadOnlyClient
 from experiments.upstox_sanitizer import sanitize_live_envelopes
-from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
+from experiments.upstox_session import CLOSED_STATUSES, get_nfo_market_status, select_session_valid_expiry
 from experiments.upstox_transport import CurlOpener
 from experiments.upstox_universe import build_core_5dr_universe
 from phase1.upstox import NIFTY, PipelineError, ReadOnlyClient
@@ -119,6 +119,27 @@ def _merge_candles(*collections):
 
 def _series_digest(rows):
     return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+def _merge_session_intraday(rows, client, market_status, unit, interval, provenance, audit):
+    """Overlay the current-session intraday series when the provider exposes it.
+
+    On a closed exchange session, Upstox can legitimately return an empty intraday
+    candle array (for example on weekends). That must not invalidate already
+    verified historical/cache evidence. Any other provider error still fails closed.
+    """
+    try:
+        intraday = client.intraday(NIFTY, unit, interval)
+    except PipelineError as error:
+        if market_status in CLOSED_STATUSES and str(error) == "Candle array missing":
+            audit["intraday_overlay"] = "UNAVAILABLE_MARKET_CLOSED"
+            audit["intraday_provider_call_made"] = 1
+            return _merge_candles(rows)
+        raise
+    provenance.append(intraday["sha256"])
+    audit["intraday_overlay"] = "UPSTOX_INTRADAY"
+    audit["intraday_provider_call_made"] = 1
+    return _merge_candles(rows, intraday["payload"]["data"]["candles"])
 
 
 def _historical_window(client, cache_reader, cache_mode, timeframe, unit, interval, start, end):
@@ -380,9 +401,15 @@ def build_live_shadow_bundle(token):
         )
         cache_audit[timeframe] = history_audit
         if timeframe != "1d":
-            intraday = client.intraday(NIFTY, unit, interval)
-            rows = _merge_candles(rows, intraday["payload"]["data"]["candles"])
-            provenance.append(intraday["sha256"])
+            rows = _merge_session_intraday(
+                rows,
+                client,
+                market_status["status"],
+                unit,
+                interval,
+                provenance,
+                history_audit,
+            )
         else:
             rows = _merge_candles(rows)
         source_series[timeframe] = rows

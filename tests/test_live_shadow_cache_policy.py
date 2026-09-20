@@ -4,7 +4,8 @@ import pytest
 
 from experiments.cache_reconcile import reconcile_candles
 from experiments.data_contract import DataArchitectureError
-from experiments.live_shadow_bundle import _historical_window
+from experiments.live_shadow_bundle import _historical_window, _merge_session_intraday
+from phase1.upstox import PipelineError
 
 
 ROWS=[
@@ -98,3 +99,52 @@ def test_cache_first_missing_tail_uses_strict_reconciliation():
         "2026-09-17T03:45:00+00:00",
         "2026-09-18T03:45:00+00:00",
     ]
+
+
+class IntradayClient:
+    def __init__(self, *, rows=None, error=None):
+        self.rows = rows
+        self.error = error
+        self.calls = 0
+
+    def intraday(self, key, unit, interval):
+        self.calls += 1
+        if self.error:
+            raise PipelineError(self.error)
+        return {
+            "payload": {"data": {"candles": self.rows}},
+            "sha256": "e" * 64,
+        }
+
+
+def test_closed_market_empty_intraday_keeps_verified_history():
+    provenance = ["b" * 64]
+    audit = {}
+    client = IntradayClient(error="Candle array missing")
+    rows = _merge_session_intraday(
+        ROWS, client, "NORMAL_CLOSE", "minutes", 5, provenance, audit
+    )
+    assert rows == ROWS
+    assert provenance == ["b" * 64]
+    assert audit["intraday_overlay"] == "UNAVAILABLE_MARKET_CLOSED"
+    assert client.calls == 1
+
+
+def test_open_market_empty_intraday_still_fails_closed():
+    client = IntradayClient(error="Candle array missing")
+    with pytest.raises(PipelineError):
+        _merge_session_intraday(
+            ROWS, client, "NORMAL_OPEN", "minutes", 5, ["b" * 64], {}
+        )
+
+
+def test_closed_market_nonempty_intraday_is_merged():
+    live = [["2026-09-18T03:45:00+00:00", 2, 3, 1.5, 2.5, 12, 0]]
+    provenance = ["b" * 64]
+    audit = {}
+    rows = _merge_session_intraday(
+        ROWS, IntradayClient(rows=live), "NORMAL_CLOSE", "minutes", 5, provenance, audit
+    )
+    assert rows[-1][0] == "2026-09-18T03:45:00+00:00"
+    assert provenance[-1] == "e" * 64
+    assert audit["intraday_overlay"] == "UPSTOX_INTRADAY"
