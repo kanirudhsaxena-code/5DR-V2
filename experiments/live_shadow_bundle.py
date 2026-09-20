@@ -426,7 +426,14 @@ def build_live_shadow_bundle(token):
 
     intraday_1m = legacy.intraday()
     chain = legacy.chain(expiry)
-    sanitized = sanitize_live_envelopes(contracts, intraday_1m, chain, today, selected_expiry=expiry)
+    sanitized = sanitize_live_envelopes(
+        contracts,
+        intraday_1m,
+        chain,
+        today,
+        selected_expiry=expiry,
+        allow_empty_intraday=market_status["status"] in CLOSED_STATUSES,
+    )
     option_keys = []
     for strike in sanitized["sample_strikes"]:
         option_keys.extend((strike["CE"]["instrument_key"], strike["PE"]["instrument_key"]))
