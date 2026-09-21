@@ -169,6 +169,27 @@ jobs:
                   horizon_rows = cur.fetchall()
 
                   cur.execute("""
+                      SELECT CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER) AS day_number,
+                             COUNT(*) AS eligible_matured
+                        FROM outcome_checkpoints oc
+                        JOIN canonical_selections cs
+                          ON cs.selected_forecast_id=oc.forecast_id
+                         AND cs.selection_status='SELECTED'
+                       WHERE oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')
+                         AND (
+                           oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+                           OR (
+                             oc.due_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+                             AND (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::time >= time '15:40'
+                           )
+                         )
+                       GROUP BY CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER)
+                       ORDER BY day_number
+                  """)
+                  eligible_rows = cur.fetchall()
+                  eligible_by_day = {int(day): int(count or 0) for day,count in eligible_rows}
+
+                  cur.execute("""
                       WITH canon AS (
                         SELECT e.*
                         FROM v_latest_forecast_checkpoint_evaluation e
@@ -362,7 +383,10 @@ jobs:
           day_metrics = {
               f"D+{d}": {
                   "status": "NOT DUE",
+                  "eligible_matured": 0,
                   "scorable": 0,
+                  "missing_unscorable": 0,
+                  "coverage_pct": None,
                   "hits": 0,
                   "zone_scorable": 0,
                   "zone_hits": 0,
@@ -386,10 +410,29 @@ jobs:
                   "avg_zone_error_points": float(avg_zone_error) if avg_zone_error is not None else None,
               }
 
+          for day_number in range(1,6):
+              key=f"D+{day_number}"
+              eligible=int(eligible_by_day.get(day_number,0))
+              scored=int(day_metrics[key].get("scorable") or 0)
+              day_metrics[key]["eligible_matured"]=eligible
+              day_metrics[key]["missing_unscorable"]=max(eligible-scored,0)
+              day_metrics[key]["coverage_pct"]=round(100.0*scored/eligible,2) if eligible else None
+              if eligible and scored < eligible:
+                  day_metrics[key]["status"]="PARTIAL_SCORABLE" if scored else "MATURED_NOT_SCORABLE"
+              elif scored:
+                  day_metrics[key]["status"]="SCORABLE"
+              else:
+                  day_metrics[key]["status"]="NOT DUE"
+
           scorable = int(scorable or 0)
           directional_hits = int(directional_hits or 0)
           zone_hits = int(zone_hits or 0)
-          headline = f"{directional_hits}/{scorable} due canonical checkpoints directionally correct; {zone_hits}/{scorable} zone hits"
+          eligible_matured_total = sum(int(day_metrics[f"D+{d}"]["eligible_matured"] or 0) for d in range(1,6))
+          missing_unscorable_total = max(eligible_matured_total-scorable,0)
+          scorable_coverage_pct = round(100.0*scorable/eligible_matured_total,2) if eligible_matured_total else None
+          headline = f"{directional_hits}/{scorable} scorable canonical checkpoints directionally correct; {zone_hits}/{scorable} zone hits"
+          if eligible_matured_total:
+              headline += f"; {scorable}/{eligible_matured_total} matured eligible checkpoints scorable"
           if overdue:
               headline += f"; {overdue} overdue checkpoints still pending reconciliation"
           if integrity_incomplete:
@@ -397,8 +440,11 @@ jobs:
 
           overall = {
               "headline": headline,
+              "canonical_matured_eligible_checkpoints": eligible_matured_total,
               "canonical_scorable_checkpoints": scorable,
               "canonical_scorable": scorable,
+              "missing_unscorable_checkpoints": missing_unscorable_total,
+              "scorable_coverage_pct": scorable_coverage_pct,
               "directional_hits": directional_hits,
               "zone_hits": zone_hits,
               "directional_accuracy_pct": float(accuracy) if accuracy is not None else None,
