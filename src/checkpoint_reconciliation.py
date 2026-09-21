@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from phase1.upstox import ReadOnlyClient, validate_candles
 from experiments.upstox_transport import CurlOpener
 from .assessment import evaluate_forecast_checkpoint
+from .console_forecast_sync import next_trading_days_after
 
 IST = ZoneInfo("Asia/Kolkata")
 POST_CLOSE_CAPTURE = time(15, 40)
@@ -72,7 +73,14 @@ def exact_daily_candle(client: ReadOnlyClient, trading_date: date) -> dict:
 
 
 def seed_missing_canonical_checkpoints(conn) -> int:
-    """Seed D+1..D+5 only where an immutable daily_forecasts row already exists."""
+    """Seed canonical maturity checkpoints without inventing forecast values.
+
+    Preferred dates come from immutable daily_forecasts. For legacy selected
+    canonicals whose day-path rows were never persisted, seed eligibility-only
+    D+1..D+5 dates from the verified 2026 trading calendar and target date. Those
+    checkpoints may capture realized outcomes but remain unscored until original
+    frozen forecast context exists.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -99,7 +107,39 @@ def seed_missing_canonical_checkpoints(conn) -> int:
         )
         count = max(cur.rowcount, 0)
     conn.commit()
-    return count
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT cs.selected_forecast_id,cs.target_trading_date
+              FROM canonical_selections cs
+             WHERE cs.selection_status='SELECTED'
+               AND cs.selected_forecast_id IS NOT NULL
+             ORDER BY cs.target_trading_date
+            """
+        )
+        selected = cur.fetchall()
+    legacy_seeded = 0
+    for forecast_id,target_date in selected:
+        dates = [target_date] + next_trading_days_after(target_date, 4)
+        for day_number,due_date in enumerate(dates, start=1):
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO outcome_checkpoints
+                      (forecast_id,checkpoint_type,due_date,status,source_ref,notes)
+                    SELECT %s,%s,%s,'DUE','VERIFIED_2026_TRADING_CALENDAR',
+                           'Eligibility checkpoint seeded from selected canonical target date; no forecast direction/range reconstructed.'
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM outcome_checkpoints
+                       WHERE forecast_id=%s AND checkpoint_type=%s
+                    )
+                    """,
+                    (forecast_id,f"D+{day_number}",due_date,forecast_id,f"D+{day_number}"),
+                )
+                legacy_seeded += max(cur.rowcount,0)
+        conn.commit()
+    return count + legacy_seeded
 
 
 def _due_canonical_rows(conn) -> list[dict]:
