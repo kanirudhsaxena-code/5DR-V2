@@ -118,6 +118,34 @@ jobs:
                   forecast_id = source[0]
 
                   cur.execute("""
+                      SELECT target_trading_date,selection_status,selection_rule,selection_reason,
+                             selected_forecast_id,selected_at
+                      FROM canonical_selections
+                      ORDER BY target_trading_date DESC
+                      LIMIT 1
+                  """)
+                  canonical_row = cur.fetchone()
+                  canonical_selection = None
+                  if canonical_row:
+                      target_date,selection_status,selection_rule,selection_reason,selected_id,selected_at = canonical_row
+                      if target_date < datetime(2026,9,22,tzinfo=timezone.utc).date():
+                          canonical_type = "LEGACY_CANONICAL" if selection_status=="SELECTED" else "LEGACY_CANONICAL_MISSED"
+                          governance_era = "LEGACY"
+                      else:
+                          canonical_type = str(selection_rule or ("CANONICAL_MISSED" if selection_status!="SELECTED" else "PREOPEN_CANONICAL"))
+                          governance_era = "POST_GOVERNANCE"
+                      canonical_selection = {
+                          "target_trading_date": target_date.isoformat(),
+                          "selection_status": selection_status,
+                          "canonical_type": canonical_type,
+                          "selection_rule": selection_rule,
+                          "selected_forecast_id": selected_id,
+                          "selected_at": selected_at.isoformat() if selected_at else None,
+                          "selection_reason": selection_reason,
+                          "governance_era": governance_era,
+                      }
+
+                  cur.execute("""
                       WITH canon AS (
                         SELECT e.*
                         FROM v_latest_forecast_checkpoint_evaluation e
@@ -429,6 +457,7 @@ jobs:
           }
 
           metrics = {
+              "canonical_selection": canonical_selection,
               "overall_forecast_metrics": overall,
               "day_metrics": day_metrics,
               "recommendation_metrics": rec,
