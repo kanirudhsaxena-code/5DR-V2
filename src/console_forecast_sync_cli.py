@@ -59,9 +59,54 @@ def main() -> int:
     conn = psycopg2.connect(database_url)
     try:
         summary = sync_console_runs(conn, runs, request_fetcher)
+        unaccounted_complete = summary.complete_runs_seen - summary.imported - summary.already_imported
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                  FROM runs r
+                  JOIN forecasts f ON f.run_id=r.run_id
+                 WHERE r.notes LIKE 'EDGE_CONSOLE_RUN_ID=%'
+                   AND (
+                     (SELECT COUNT(*) FROM daily_forecasts df WHERE df.forecast_id=f.forecast_id) <> 5
+                     OR NOT EXISTS (
+                       SELECT 1 FROM forecast_governance fg WHERE fg.forecast_id=f.forecast_id
+                     )
+                   )
+                """
+            )
+            broken_imports = int(cur.fetchone()[0] or 0)
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                  FROM forecast_governance fg
+                 WHERE fg.run_class='CANONICAL_CANDIDATE'
+                   AND fg.validity_status='VALID'
+                   AND fg.canonical_window_close <= CURRENT_TIMESTAMP
+                   AND NOT EXISTS (
+                     SELECT 1 FROM canonical_selections cs
+                      WHERE cs.target_trading_date=fg.target_trading_date
+                   )
+                """
+            )
+            unfinalized_closed_windows = int(cur.fetchone()[0] or 0)
+
+        if unaccounted_complete or broken_imports or unfinalized_closed_windows:
+            raise SystemExit(
+                "CANONICAL_SYNC_INTEGRITY_FAILED "
+                f"unaccounted_complete={unaccounted_complete} "
+                f"broken_imports={broken_imports} "
+                f"unfinalized_closed_windows={unfinalized_closed_windows}"
+            )
+
         print(json.dumps({
             "status": "CONSOLE_CANONICAL_SYNC_COMPLETE",
             "summary": summary.to_dict(),
+            "integrity": {
+                "unaccounted_complete": unaccounted_complete,
+                "broken_imports": broken_imports,
+                "unfinalized_closed_windows": unfinalized_closed_windows,
+            },
             "trading_enabled": False,
             "methodology_changed": False,
         }, sort_keys=True))
