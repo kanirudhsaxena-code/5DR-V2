@@ -11,8 +11,6 @@ import json
 import os
 from urllib.request import Request, urlopen
 
-import psycopg2
-
 from .console_forecast_sync import sync_console_runs
 
 SCHEMA_VERSION = "5DR_CONSOLE_HANDOFF_V1"
@@ -87,6 +85,7 @@ def main() -> int:
     def request_fetcher(run_id: str) -> dict:
         return request_cache.get(run_id, {})
 
+    import psycopg2
     conn = psycopg2.connect(database_url)
     try:
         summary = sync_console_runs(conn, runs, request_fetcher)
