@@ -54,11 +54,31 @@ jobs:
           finally:
               conn.close()
           PY
+      - name: Verify authenticated EDGE Console service access
+        env:
+          EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
+          curl --location --fail-with-body --silent --show-error \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            -H "Accept: application/json" \
+            "$EDGE_CONSOLE_URL/api/health" -o /tmp/edge-console-health.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/edge-console-health.json'))
+          if data.get('ok') is not True:
+              raise SystemExit(f"EDGE_CONSOLE_SERVICE_ACCESS_FAILED: {data}")
+          print("edge_console_service_access_ok")
+          PY
       - name: Synchronize complete EDGE Console forecasts into canonical ledger
         env:
           EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           test -n "$CF_ACCESS_CLIENT_ID"
           test -n "$CF_ACCESS_CLIENT_SECRET"
@@ -99,8 +119,8 @@ jobs:
       - name: Publish current cumulative assessment to EDGE Console
         env:
           EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           python - <<'PY'
           import json, os, urllib.request
