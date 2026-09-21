@@ -86,3 +86,12 @@ def test_bridge_uses_canonical_execution_and_evidence_schema_values():
     assert '"PE" if recommendation=="BUY_PE"' in source
     assert '"CONVEXITY"' in source
     assert "NIFTY_OPTION" not in source
+
+
+def test_sync_cli_fails_closed_on_missing_canonical_integrity():
+    source = Path("src/console_forecast_sync_cli.py").read_text(encoding="utf-8")
+    assert "CANONICAL_SYNC_INTEGRITY_FAILED" in source
+    assert "unaccounted_complete" in source
+    assert "broken_imports" in source
+    assert "unfinalized_closed_windows" in source
+    assert "COUNT(*) FROM daily_forecasts" in source
