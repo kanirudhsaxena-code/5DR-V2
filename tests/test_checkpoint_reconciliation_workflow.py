@@ -23,18 +23,20 @@ def test_reconciliation_change_triggers_immediate_main_run():
     assert "src/checkpoint_reconciliation.py" in text
 
 
-def test_assessment_callback_uses_cloudflare_service_credentials():
+def test_lifecycle_uses_governed_repository_state_instead_of_cross_repo_cloudflare_credentials():
     text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
-    assert "CF_ACCESS_CLIENT_ID" in text
-    assert "CF_ACCESS_CLIENT_SECRET" in text
-    assert "CF-Access-Client-Id" in text
-    assert "CF-Access-Client-Secret" in text
+    assert "EDGE_CONSOLE_HANDOFF_URL" in text
+    assert "state/5dr-handoff/runtime/5dr-canonical-handoff.json" in text
+    assert "CF-Access-Client-Id" not in text
+    assert "CF-Access-Client-Secret" not in text
 
 
-def test_cloudflare_access_secret_names_have_repo_compatible_fallbacks():
+def test_assessment_is_published_to_isolated_state_branch():
     text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
-    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID" in text
-    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET" in text
+    assert "5DR_ASSESSMENT_HANDOFF_V1" in text
+    assert "state/assessment-handoff" in text
+    assert "runtime/5dr-assessment-handoff.json" in text
+    assert "contents: write" in text
 
 
 def test_headline_recommendation_efficacy_is_selected_canonical_only():
@@ -69,8 +71,8 @@ def test_assessment_reports_matured_eligible_vs_scorable_coverage():
     assert "scorable_coverage_pct" in text
     assert "matured eligible checkpoints scorable" in text
 
-def test_lifecycle_prefers_current_cloudflare_service_token_and_probes_access():
+def test_lifecycle_has_no_direct_console_access_dependency():
     text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
-    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID" in text
-    assert "Verify authenticated EDGE Console service access" in text
-    assert "edge_console_service_access_ok" in text
+    assert "Verify authenticated EDGE Console service access" not in text
+    assert "/api/assessment-import" not in text
+    assert "assessment_handoff_built" in text
