@@ -76,3 +76,12 @@ def test_lifecycle_has_no_direct_console_access_dependency():
     assert "Verify authenticated EDGE Console service access" not in text
     assert "/api/assessment-import" not in text
     assert "assessment_handoff_built" in text
+
+
+def test_assessment_handoff_exposes_canonical_regime_metadata():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert '"canonical_selection": canonical_selection' in text
+    assert '"canonical_type": canonical_type' in text
+    assert '"governance_era": governance_era' in text
+    assert 'LEGACY_CANONICAL' in text
+    assert 'POST_GOVERNANCE' in text
