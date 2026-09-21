@@ -58,3 +58,12 @@ def test_exact_daily_candle_fails_closed_for_wrong_session():
         assert False, "wrong session candle must not be accepted"
     except ValueError as exc:
         assert "not available" in str(exc)
+
+
+def test_legacy_selected_canonical_can_seed_maturity_dates_without_forecast_values():
+    from src.console_forecast_sync import next_trading_days_after
+    target = date(2026, 9, 17)
+    dates = [target] + next_trading_days_after(target, 4)
+    assert [d.isoformat() for d in dates] == [
+        "2026-09-17","2026-09-18","2026-09-21","2026-09-22","2026-09-23"
+    ]
