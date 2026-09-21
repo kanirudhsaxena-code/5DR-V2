@@ -477,10 +477,31 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
     return forecast_id
 
 
+def _candidate_type(validity_reason: str | None, evidence_mode: str) -> str:
+    text = str(validity_reason or "")
+    for value in ("PREOPEN_CANONICAL","OVERNIGHT_FALLBACK_CANONICAL","LEGACY_CANONICAL"):
+        if f"canonical_type={value}" in text:
+            return value
+    if evidence_mode == "PREOPEN_REFRESH":
+        return "PREOPEN_CANONICAL"
+    if evidence_mode == "MARKET_CLOSED_CARRY_FORWARD":
+        return "LEGACY_CANONICAL"
+    return "OVERNIGHT_FALLBACK_CANONICAL"
+
+
 def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> int:
+    """Finalize one official canonical per target trading date.
+
+    Post-activation preference is PREOPEN_CANONICAL, then overnight fallback,
+    otherwise CANONICAL_MISSED. Legacy targets preserve the historical latest-valid
+    rule. Selection is append-only because canonical_selections is immutable.
+    """
     now_ist = now_ist or datetime.now(IST)
     if now_ist.tzinfo is None:
         raise ValueError("now_ist must be timezone-aware")
+    local_now = now_ist.astimezone(IST)
+    hard_boundary = datetime.combine(local_now.date(), HARD_CANONICAL_COMPLETION_CUTOFF, tzinfo=IST)
+
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -495,22 +516,39 @@ def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> 
                )
              ORDER BY target_trading_date
             """,
-            (now_ist,),
+            (local_now,),
         )
         targets = [row[0] for row in cur.fetchall()]
 
+    # A post-activation trading day with no eligible candidates must still become
+    # explicitly CANONICAL_MISSED after the 09:00 hard boundary.
+    today = local_now.date()
+    if (
+        today >= CANONICAL_TIMING_ACTIVATION_TARGET_DATE
+        and is_trading_day(today)
+        and local_now >= hard_boundary
+    ):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM canonical_selections WHERE target_trading_date=%s LIMIT 1",
+                (today,),
+            )
+            if cur.fetchone() is None and today not in targets:
+                targets.append(today)
+
     finalized = 0
-    for target in targets:
+    for target in sorted(targets):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT fg.forecast_id,fg.canonical_window_open,fg.canonical_window_close,f.run_timestamp
+                SELECT fg.forecast_id,fg.canonical_window_open,fg.canonical_window_close,
+                       f.run_timestamp,fg.validity_reason,fg.evidence_mode
                   FROM forecast_governance fg
                   JOIN forecasts f ON f.forecast_id=fg.forecast_id
                  WHERE fg.target_trading_date=%s
                    AND fg.run_class='CANONICAL_CANDIDATE'
                    AND fg.validity_status='VALID'
-                   AND f.run_timestamp BETWEEN fg.canonical_window_open AND fg.canonical_window_close
+                   AND f.run_timestamp < fg.canonical_window_close
                    AND EXISTS (
                      SELECT 1
                        FROM daily_forecasts df
@@ -525,32 +563,61 @@ def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> 
                              OR df.zone_low IS NULL OR df.zone_high IS NULL
                         )=0
                    )
-                 ORDER BY f.run_timestamp DESC
                 """,
                 (target,),
             )
-            candidates = cur.fetchall()
-            if not candidates:
-                continue
-            selected_id, window_open, window_close, _ = candidates[0]
-            first_id = candidates[-1][0]
-            cur.execute(
-                """
-                INSERT INTO canonical_selections(
-                  target_trading_date,selection_status,selected_forecast_id,first_candidate_forecast_id,
-                  selected_at,window_open_at,window_close_at,selection_rule,selection_reason
-                ) VALUES (%s,'SELECTED',%s,%s,%s,%s,%s,'LATEST_VALID_CANDIDATE_IN_WINDOW',%s)
-                ON CONFLICT (target_trading_date) DO NOTHING
-                """,
-                (
-                    target, selected_id, first_id, window_close, window_open, window_close,
-                    f"Canonical window closed; {selected_id} was the latest valid candidate.",
-                ),
-            )
-            finalized += max(cur.rowcount, 0)
+            rows = cur.fetchall()
+
+            candidates = []
+            for row in rows:
+                forecast_id,window_open,window_close,run_ts,reason,evidence_mode = row
+                ctype = _candidate_type(reason,evidence_mode)
+                candidates.append((forecast_id,window_open,window_close,run_ts,ctype))
+
+            if target < CANONICAL_TIMING_ACTIVATION_TARGET_DATE:
+                candidates.sort(key=lambda row: row[3], reverse=True)
+            else:
+                priority={"PREOPEN_CANONICAL":3,"OVERNIGHT_FALLBACK_CANONICAL":2,"LEGACY_CANONICAL":1}
+                candidates.sort(key=lambda row:(priority.get(row[4],0),row[3]),reverse=True)
+
+            if candidates:
+                selected_id,window_open,window_close,_,canonical_type = candidates[0]
+                first_id = sorted(candidates,key=lambda row:row[3])[0][0]
+                cur.execute(
+                    """
+                    INSERT INTO canonical_selections(
+                      target_trading_date,selection_status,selected_forecast_id,first_candidate_forecast_id,
+                      selected_at,window_open_at,window_close_at,selection_rule,selection_reason
+                    ) VALUES (%s,'SELECTED',%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (target_trading_date) DO NOTHING
+                    """,
+                    (
+                        target,selected_id,first_id,local_now,window_open,window_close,
+                        canonical_type,
+                        f"{canonical_type}: latest valid complete candidate selected under frozen timing governance.",
+                    ),
+                )
+                finalized += max(cur.rowcount,0)
+            elif target >= CANONICAL_TIMING_ACTIVATION_TARGET_DATE:
+                window_open = datetime.combine(target, PREOPEN_WINDOW_START, tzinfo=IST)
+                window_close = datetime.combine(target, HARD_CANONICAL_COMPLETION_CUTOFF, tzinfo=IST)
+                if local_now >= window_close:
+                    cur.execute(
+                        """
+                        INSERT INTO canonical_selections(
+                          target_trading_date,selection_status,selected_forecast_id,first_candidate_forecast_id,
+                          selected_at,window_open_at,window_close_at,selection_rule,selection_reason
+                        ) VALUES (%s,'NO_VALID_CANDIDATE',NULL,NULL,%s,%s,%s,'CANONICAL_MISSED',%s)
+                        ON CONFLICT (target_trading_date) DO NOTHING
+                        """,
+                        (
+                            target,local_now,window_open,window_close,
+                            "No complete PREOPEN_CANONICAL or qualifying OVERNIGHT_FALLBACK_CANONICAL existed by the hard 09:00 IST boundary.",
+                        ),
+                    )
+                    finalized += max(cur.rowcount,0)
         conn.commit()
     return finalized
-
 
 def sync_console_runs(conn, runs: list[dict], request_fetcher, now_ist: datetime | None = None) -> SyncSummary:
     imported = existing = incomplete = complete = 0
