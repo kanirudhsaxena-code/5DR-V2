@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   guard:
@@ -30,6 +30,8 @@ jobs:
       EVIDENCE_PATH: runtime/evidence.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -54,34 +56,10 @@ jobs:
           finally:
               conn.close()
           PY
-      - name: Verify authenticated EDGE Console service access
-        env:
-          EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          test -n "$CF_ACCESS_CLIENT_ID"
-          test -n "$CF_ACCESS_CLIENT_SECRET"
-          curl --location --fail-with-body --silent --show-error \
-            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -H "Accept: application/json" \
-            "$EDGE_CONSOLE_URL/api/health" -o /tmp/edge-console-health.json
-          python - <<'PY'
-          import json
-          data=json.load(open('/tmp/edge-console-health.json'))
-          if data.get('ok') is not True:
-              raise SystemExit(f"EDGE_CONSOLE_SERVICE_ACCESS_FAILED: {data}")
-          print("edge_console_service_access_ok")
-          PY
       - name: Synchronize complete EDGE Console forecasts into canonical ledger
         env:
-          EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
+          EDGE_CONSOLE_HANDOFF_URL: https://raw.githubusercontent.com/kanirudhsaxena-code/EDGE-CONSOLE/state/5dr-handoff/runtime/5dr-canonical-handoff.json
         run: |
-          test -n "$CF_ACCESS_CLIENT_ID"
-          test -n "$CF_ACCESS_CLIENT_SECRET"
           python -m src.console_forecast_sync_cli | tee console-canonical-sync.json
       - name: Reconcile due canonical NIFTY checkpoints
         run: |
@@ -116,14 +94,10 @@ jobs:
         if: steps.evidence.outputs.present != 'true'
         run: |
           printf '%s\n' '{"mode":"NO_WRITE","writes_enabled":false,"reason":"NO_EVIDENCE_HANDOFF","database_connection":"CONFIGURED_VIA_SECRET"}' > activation-audit.json
-      - name: Publish current cumulative assessment to EDGE Console
-        env:
-          EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Build current cumulative assessment handoff
         run: |
           python - <<'PY'
-          import json, os, urllib.request
+          import json, os
           from datetime import datetime, timezone
           import psycopg2
 
@@ -491,22 +465,36 @@ jobs:
               "score": float(accuracy) if accuracy is not None else None,
               "metrics": metrics,
           }
-          headers = {"Content-Type":"application/json"}
-          client_id = (os.environ.get("CF_ACCESS_CLIENT_ID") or "").strip()
-          client_secret = (os.environ.get("CF_ACCESS_CLIENT_SECRET") or "").strip()
-          if client_id and client_secret:
-              headers["CF-Access-Client-Id"] = client_id
-              headers["CF-Access-Client-Secret"] = client_secret
-          req = urllib.request.Request(
-              os.environ["EDGE_CONSOLE_URL"].rstrip("/") + "/api/assessment-import",
-              data=json.dumps(payload).encode("utf-8"),
-              headers=headers,
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=30) as response:
-              print("assessment_publish_status=" + str(response.status))
-              print(response.read().decode("utf-8"))
+          handoff = {
+              "schema_version": "5DR_ASSESSMENT_HANDOFF_V1",
+              "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+              "source": "5DR_CANONICAL_LIFECYCLE",
+              "assessment": payload,
+          }
+          with open("assessment-handoff.json","w",encoding="utf-8") as handle:
+              json.dump(handoff,handle,sort_keys=True,separators=(",",":"),default=str)
+              handle.write("\n")
+          print("assessment_handoff_built")
           PY
+      - name: Publish canonical assessment to isolated state branch
+        run: |
+          set -euo pipefail
+          test -s assessment-handoff.json
+          git fetch origin state/assessment-handoff
+          rm -rf /tmp/5dr-assessment-state
+          git worktree add /tmp/5dr-assessment-state origin/state/assessment-handoff
+          cd /tmp/5dr-assessment-state
+          mkdir -p runtime
+          cp "$GITHUB_WORKSPACE/assessment-handoff.json" runtime/5dr-assessment-handoff.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add runtime/5dr-assessment-handoff.json
+          if git diff --cached --quiet; then
+            echo "assessment_state_unchanged"
+            exit 0
+          fi
+          git commit -m "Update canonical 5DR assessment handoff [skip ci]"
+          git push origin HEAD:state/assessment-handoff
       - uses: actions/upload-artifact@v4
         with:
           name: lifecycle-production-wrapper-audit
@@ -514,4 +502,5 @@ jobs:
             activation-audit.json
             console-canonical-sync.json
             checkpoint-reconciliation.json
+            assessment-handoff.json
           retention-days: 30
