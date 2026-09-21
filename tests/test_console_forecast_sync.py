@@ -95,3 +95,11 @@ def test_sync_cli_fails_closed_on_missing_canonical_integrity():
     assert "broken_imports" in source
     assert "unfinalized_closed_windows" in source
     assert "COUNT(*) FROM daily_forecasts" in source
+
+
+def test_canonical_selection_requires_complete_five_day_path():
+    source = Path("src/console_forecast_sync.py").read_text(encoding="utf-8")
+    assert "COUNT(*)=5" in source
+    assert "COUNT(DISTINCT df.day_number)=5" in source
+    assert "MIN(df.day_number)=1" in source
+    assert "MAX(df.day_number)=5" in source
