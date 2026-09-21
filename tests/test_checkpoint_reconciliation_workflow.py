@@ -60,3 +60,17 @@ def test_assessment_clock_advances_on_canonical_recommendation_events():
     assert "recommendation_as_of" in text
     assert "forecast_assessed_at" in text
     assert "assessed_at = max(" in text
+
+
+def test_assessment_reports_matured_eligible_vs_scorable_coverage():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert "eligible_matured" in text
+    assert "missing_unscorable" in text
+    assert "scorable_coverage_pct" in text
+    assert "matured eligible checkpoints scorable" in text
+
+def test_lifecycle_prefers_current_cloudflare_service_token_and_probes_access():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID" in text
+    assert "Verify authenticated EDGE Console service access" in text
+    assert "edge_console_service_access_ok" in text
