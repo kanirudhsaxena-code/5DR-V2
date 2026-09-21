@@ -1,60 +1,91 @@
-"""Synchronize complete published EDGE Console 5DR runs into canonical persistence."""
+"""Synchronize complete published EDGE Console 5DR runs into canonical persistence
+from the governed public handoff state branch.
+
+No Cloudflare credential is required in the 5DR repository. EDGE Console owns
+its own authenticated export and publishes only the sanitized fields needed here.
+"""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
-from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 import psycopg2
 
 from .console_forecast_sync import sync_console_runs
 
-
-def _headers() -> dict[str, str]:
-    headers = {"Accept": "application/json", "Cache-Control": "no-cache"}
-    client_id = (os.environ.get("CF_ACCESS_CLIENT_ID") or "").strip()
-    client_secret = (os.environ.get("CF_ACCESS_CLIENT_SECRET") or "").strip()
-    if client_id and client_secret:
-        headers["CF-Access-Client-Id"] = client_id
-        headers["CF-Access-Client-Secret"] = client_secret
-    return headers
+SCHEMA_VERSION = "5DR_CONSOLE_HANDOFF_V1"
+MAX_HANDOFF_AGE_SECONDS = 5400
 
 
 def _get_json(url: str) -> dict:
-    request = Request(url, headers=_headers(), method="GET")
+    request = Request(
+        url,
+        headers={"Accept": "application/json", "Cache-Control": "no-cache"},
+        method="GET",
+    )
     with urlopen(request, timeout=30) as response:
         if response.status != 200:
-            raise RuntimeError(f"Console API returned HTTP {response.status} for {url}")
+            raise RuntimeError(f"Handoff returned HTTP {response.status} for {url}")
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
-        raise RuntimeError("Console API returned a non-object JSON payload")
+        raise RuntimeError("Console handoff returned a non-object JSON payload")
     return payload
+
+
+def _validate_handoff(payload: dict) -> tuple[list[dict], dict[str, dict]]:
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise SystemExit(
+            f"CONSOLE_HANDOFF_SCHEMA_MISMATCH expected={SCHEMA_VERSION} "
+            f"actual={payload.get('schema_version')}"
+        )
+    generated = payload.get("generated_at")
+    if not isinstance(generated, str) or not generated:
+        raise SystemExit("CONSOLE_HANDOFF_MISSING_GENERATED_AT")
+    generated_at = datetime.fromisoformat(generated.replace("Z", "+00:00"))
+    if generated_at.tzinfo is None:
+        raise SystemExit("CONSOLE_HANDOFF_GENERATED_AT_NOT_TIMEZONE_AWARE")
+    age = (datetime.now(timezone.utc) - generated_at.astimezone(timezone.utc)).total_seconds()
+    if age < -300 or age > MAX_HANDOFF_AGE_SECONDS:
+        raise SystemExit(f"CONSOLE_HANDOFF_STALE age_seconds={int(age)}")
+
+    entries = payload.get("runs")
+    if not isinstance(entries, list):
+        raise SystemExit("CONSOLE_HANDOFF_RUNS_NOT_ARRAY")
+
+    runs: list[dict] = []
+    requests: dict[str, dict] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise SystemExit("CONSOLE_HANDOFF_ENTRY_INVALID")
+        run = entry.get("run")
+        request = entry.get("request")
+        if not isinstance(run, dict) or not isinstance(request, dict):
+            raise SystemExit("CONSOLE_HANDOFF_ENTRY_MISSING_RUN_OR_REQUEST")
+        run_id = str(run.get("run_id") or "").strip()
+        if not run_id:
+            raise SystemExit("CONSOLE_HANDOFF_RUN_ID_MISSING")
+        if run_id in requests:
+            raise SystemExit(f"CONSOLE_HANDOFF_DUPLICATE_RUN_ID {run_id}")
+        runs.append(run)
+        requests[run_id] = request
+    return runs, requests
 
 
 def main() -> int:
     database_url = (os.environ.get("DATABASE_URL") or "").strip()
-    console_url = (os.environ.get("EDGE_CONSOLE_URL") or "").strip().rstrip("/")
+    handoff_url = (os.environ.get("EDGE_CONSOLE_HANDOFF_URL") or "").strip()
     if not database_url:
         raise SystemExit("DATABASE_URL is required")
-    if not console_url:
-        raise SystemExit("EDGE_CONSOLE_URL is required")
+    if not handoff_url:
+        raise SystemExit("EDGE_CONSOLE_HANDOFF_URL is required")
 
-    runs_payload = _get_json(console_url + "/api/runs/latest?" + urlencode({"engine": "5DR"}))
-    runs = runs_payload.get("runs")
-    if not isinstance(runs, list):
-        raise SystemExit("Console runs endpoint did not return a runs array")
-
-    request_cache: dict[str, dict] = {}
+    payload = _get_json(handoff_url)
+    runs, request_cache = _validate_handoff(payload)
 
     def request_fetcher(run_id: str) -> dict:
-        if run_id not in request_cache:
-            payload = _get_json(
-                console_url + "/api/5dr/run-request?" + urlencode({"run_id": run_id})
-            )
-            request = payload.get("request")
-            request_cache[run_id] = request if isinstance(request, dict) else {}
-        return request_cache[run_id]
+        return request_cache.get(run_id, {})
 
     conn = psycopg2.connect(database_url)
     try:
@@ -101,6 +132,7 @@ def main() -> int:
 
         print(json.dumps({
             "status": "CONSOLE_CANONICAL_SYNC_COMPLETE",
+            "handoff_generated_at": payload["generated_at"],
             "summary": summary.to_dict(),
             "integrity": {
                 "unaccounted_complete": unaccounted_complete,
