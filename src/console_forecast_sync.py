@@ -14,6 +14,17 @@ import json
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
+NY = ZoneInfo("America/New_York")
+CANONICAL_TIMING_ACTIVATION_TARGET_DATE = date(2026, 9, 22)
+PREOPEN_WINDOW_START = time(8, 40)
+PREOPEN_REQUEST_CUTOFF = time(8, 55)
+HARD_CANONICAL_COMPLETION_CUTOFF = time(9, 0)
+NYSE_HOLIDAYS_2026 = {
+    date(2026,1,1), date(2026,1,19), date(2026,2,16), date(2026,4,3),
+    date(2026,5,25), date(2026,6,19), date(2026,7,3), date(2026,9,7),
+    date(2026,11,26), date(2026,12,25),
+}
+NYSE_EARLY_CLOSES_2026 = {date(2026,11,27), date(2026,12,24)}
 HORIZONS = tuple(f"D+{i}" for i in range(1, 6))
 DIRECTIONS = {"BULLISH", "RANGE", "BEARISH"}
 
@@ -81,28 +92,99 @@ def next_trading_days_after(day: date, count: int = 5) -> list[date]:
     return out
 
 
-def classify_run(run_timestamp: datetime) -> dict:
+def _is_nyse_session(day: date) -> bool:
+    return day.weekday() < 5 and day not in NYSE_HOLIDAYS_2026
+
+
+def last_nyse_core_close_before(target_open_ist: datetime) -> datetime:
+    """Return the latest completed NYSE cash-session close before target NSE open.
+
+    Uses the official 2026 holiday calendar, America/New_York DST rules, and known
+    2026 early-close dates. This is the lower bound for an overnight fallback.
+    """
+    if target_open_ist.tzinfo is None:
+        raise ValueError("target_open_ist must be timezone-aware")
+    candidate = target_open_ist.astimezone(NY).date()
+    for _ in range(10):
+        if _is_nyse_session(candidate):
+            close_time = time(13, 0) if candidate in NYSE_EARLY_CLOSES_2026 else time(16, 0)
+            close_ny = datetime.combine(candidate, close_time, tzinfo=NY)
+            if close_ny < target_open_ist.astimezone(NY):
+                return close_ny.astimezone(IST)
+        candidate -= timedelta(days=1)
+    raise ValueError("NYSE close could not be resolved")
+
+
+def _requested_at(request_metadata: dict | None, completed_at: datetime) -> datetime:
+    if isinstance(request_metadata, dict):
+        invocation = request_metadata.get("invocation")
+        if isinstance(invocation, dict):
+            raw = invocation.get("requested_at")
+            if isinstance(raw, str) and raw.strip():
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if parsed.tzinfo is not None:
+                    return parsed
+    return completed_at
+
+
+def classify_run(run_timestamp: datetime, request_metadata: dict | None = None) -> dict:
     if run_timestamp.tzinfo is None:
         raise ValueError("run timestamp must be timezone-aware")
-    local = run_timestamp.astimezone(IST)
-    day = local.date()
-    if is_trading_day(day) and local.time().replace(tzinfo=None) < time(15, 20):
+    completed_local = run_timestamp.astimezone(IST)
+    requested_local = _requested_at(request_metadata, run_timestamp).astimezone(IST)
+    day = requested_local.date()
+    clock = requested_local.time().replace(tzinfo=None)
+
+    if is_trading_day(day) and clock < time(15, 30):
         target = day
     else:
         target = next_trading_day(day)
+
+    target_open = datetime.combine(target, time(9, 0), tzinfo=IST)
+    hard_close = target_open
     prior = previous_trading_day(target)
-    window_open = datetime.combine(prior, time(15, 20), tzinfo=IST)
-    window_close = datetime.combine(target, time(9, 14, 59), tzinfo=IST)
-    run_class = "CANONICAL_CANDIDATE" if window_open <= local <= window_close else "INTRADAY_SNAPSHOT"
-    if is_trading_day(day) and local.time().replace(tzinfo=None) < time(9, 15):
-        daily_dates = [day] + next_trading_days_after(day, 4)
+
+    # Legacy history keeps the previous production rule and is never rewritten.
+    if target < CANONICAL_TIMING_ACTIVATION_TARGET_DATE:
+        window_open = datetime.combine(prior, time(0, 0), tzinfo=IST)
+        window_close = target_open
+        candidate = window_open <= requested_local < window_close and completed_local < hard_close
+        canonical_type = "LEGACY_CANONICAL" if candidate else "DIAGNOSTIC_SNAPSHOT"
+        run_class = "CANONICAL_CANDIDATE" if candidate else "INTRADAY_SNAPSHOT"
+        evidence_mode = "MARKET_CLOSED_CARRY_FORWARD" if candidate else "MIXED"
     else:
-        daily_dates = next_trading_days_after(day, 5)
+        preopen_open = datetime.combine(target, PREOPEN_WINDOW_START, tzinfo=IST)
+        request_cutoff = datetime.combine(target, PREOPEN_REQUEST_CUTOFF, tzinfo=IST)
+        overnight_open = last_nyse_core_close_before(target_open)
+        if preopen_open <= requested_local <= request_cutoff and completed_local < hard_close:
+            canonical_type = "PREOPEN_CANONICAL"
+            run_class = "CANONICAL_CANDIDATE"
+            evidence_mode = "PREOPEN_REFRESH"
+            window_open = preopen_open
+            window_close = hard_close
+        elif overnight_open <= requested_local < preopen_open and completed_local < hard_close:
+            canonical_type = "OVERNIGHT_FALLBACK_CANONICAL"
+            run_class = "CANONICAL_CANDIDATE"
+            evidence_mode = "MIXED"
+            window_open = overnight_open
+            window_close = hard_close
+        else:
+            canonical_type = "DIAGNOSTIC_SNAPSHOT"
+            run_class = "INTRADAY_SNAPSHOT"
+            evidence_mode = "MIXED"
+            window_open = datetime.combine(prior, time(15, 30), tzinfo=IST)
+            window_close = hard_close
+
+    daily_dates = [target] + next_trading_days_after(target, 4)
     return {
         "target_trading_date": target,
         "run_class": run_class,
+        "canonical_type": canonical_type,
+        "evidence_mode": evidence_mode,
         "window_open": window_open,
         "window_close": window_close,
+        "requested_at": requested_local,
+        "completed_at": completed_local,
         "daily_dates": daily_dates,
     }
 
@@ -252,7 +334,7 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
     if spot is None:
         return None
 
-    classification = classify_run(timestamp)
+    classification = classify_run(timestamp, metadata)
     forecast_id = _forecast_id(console_run_id, timestamp)
     probs = result.get("probabilities") or {}
     bull = _num(probs.get("BULL"))
@@ -383,12 +465,12 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
             INSERT INTO forecast_governance(
               forecast_id,target_trading_date,run_class,validity_status,validity_reason,evidence_mode,
               predecessor_forecast_id,sequence_in_lineage,canonical_window_open,canonical_window_close
-            ) VALUES (%s,%s,%s,'VALID',%s,'MIXED',%s,%s,%s,%s)
+            ) VALUES (%s,%s,%s,'VALID',%s,%s,%s,%s,%s,%s)
             """,
             (
                 forecast_id, classification["target_trading_date"], classification["run_class"],
-                "Governed EDGE Console run imported with complete immutable D+1..D+5 path.",
-                predecessor, sequence, classification["window_open"], classification["window_close"],
+                f"canonical_type={classification['canonical_type']}; requested_at={classification['requested_at'].isoformat()}; completed_at={classification['completed_at'].isoformat()}; complete immutable D+1..D+5 path.",
+                classification["evidence_mode"], predecessor, sequence, classification["window_open"], classification["window_close"],
             ),
         )
     conn.commit()
