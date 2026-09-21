@@ -165,8 +165,8 @@ jobs:
                              MAX(evaluated_at) AS assessed_at
                       FROM canon
                   """)
-                  scorable, directional_hits, zone_hits, accuracy, zone_accuracy, assessed_at = cur.fetchone()
-                  if assessed_at is None:
+                  scorable, directional_hits, zone_hits, accuracy, zone_accuracy, forecast_assessed_at = cur.fetchone()
+                  if forecast_assessed_at is None:
                       print("assessment_publish_skipped=no_scorable_checkpoint")
                       raise SystemExit(0)
 
@@ -201,21 +201,77 @@ jobs:
                   integrity_incomplete = int(cur.fetchone()[0] or 0)
 
                   cur.execute("""
-                      SELECT recommendation_metrics
-                      FROM assessment_snapshots
-                      ORDER BY assessment_as_of DESC, assessment_snapshot_id DESC
-                      LIMIT 1
+                      WITH selected AS (
+                        SELECT cs.target_trading_date,
+                               cs.selected_forecast_id AS forecast_id,
+                               f.recommendation
+                        FROM canonical_selections cs
+                        JOIN forecasts f ON f.forecast_id=cs.selected_forecast_id
+                        WHERE cs.selection_status='SELECTED'
+                          AND cs.selected_forecast_id IS NOT NULL
+                      ),
+                      terminal AS (
+                        SELECT DISTINCT ON (re.forecast_id)
+                          re.forecast_id,re.event_type,re.event_timestamp,re.pnl_pct,re.r_multiple
+                        FROM recommendation_events re
+                        JOIN selected s ON s.forecast_id=re.forecast_id
+                        WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+                        ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+                      ),
+                      event_clock AS (
+                        SELECT MAX(re.event_timestamp) AS recommendation_as_of
+                        FROM recommendation_events re
+                        JOIN selected s ON s.forecast_id=re.forecast_id
+                      )
+                      SELECT
+                        COUNT(*) FILTER (WHERE s.recommendation IN ('BUY_CE','BUY_PE','BUY_CONVEXITY')) AS actionable_calls,
+                        COUNT(*) FILTER (WHERE s.recommendation='NO_TRADE') AS no_trade_calls,
+                        COUNT(t.forecast_id) AS resolved,
+                        COUNT(*) FILTER (WHERE t.event_type='T2_HIT') AS wins,
+                        COUNT(*) FILTER (WHERE t.forecast_id IS NOT NULL AND t.event_type<>'T2_HIT') AS losses,
+                        COUNT(*) FILTER (
+                          WHERE s.recommendation IN ('BUY_CE','BUY_PE','BUY_CONVEXITY')
+                            AND t.forecast_id IS NULL
+                        ) AS open_calls,
+                        ROUND(
+                          100.0*COUNT(*) FILTER (WHERE t.event_type='T2_HIT')
+                          / NULLIF(COUNT(t.forecast_id),0),2
+                        ) AS hit_rate_pct,
+                        ROUND(AVG(t.r_multiple) FILTER (WHERE t.forecast_id IS NOT NULL),4) AS average_resolved_r,
+                        ROUND(AVG(t.pnl_pct) FILTER (WHERE t.forecast_id IS NOT NULL),4) AS average_resolved_pnl_pct,
+                        (SELECT recommendation_as_of FROM event_clock) AS recommendation_as_of
+                      FROM selected s
+                      LEFT JOIN terminal t ON t.forecast_id=s.forecast_id
                   """)
-                  rec_row = cur.fetchone()
-                  rec = rec_row[0] if rec_row and rec_row[0] else {}
+                  (
+                    actionable_calls,no_trade_calls,resolved_recommendations,recommendation_wins,
+                    recommendation_losses,open_recommendations,recommendation_hit_rate,
+                    average_resolved_r,average_resolved_pnl,recommendation_as_of
+                  ) = cur.fetchone()
+                  rec = {
+                      "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
+                      "actionable_calls": int(actionable_calls or 0),
+                      "no_trade_calls": int(no_trade_calls or 0),
+                      "resolved": int(resolved_recommendations or 0),
+                      "wins": int(recommendation_wins or 0),
+                      "losses": int(recommendation_losses or 0),
+                      "open": int(open_recommendations or 0),
+                      "hit_rate_pct": float(recommendation_hit_rate) if recommendation_hit_rate is not None else None,
+                      "hit_rate_fraction": f"{int(recommendation_wins or 0)}/{int(resolved_recommendations or 0)}",
+                      "average_resolved_r": float(average_resolved_r) if average_resolved_r is not None else None,
+                      "average_resolved_standardized_pnl_pct": float(average_resolved_pnl) if average_resolved_pnl is not None else None,
+                  }
 
                   cur.execute("""
                       WITH terminal AS (
-                        SELECT DISTINCT ON (forecast_id)
-                          forecast_id,event_type,pnl_pct,event_timestamp
-                        FROM recommendation_events
-                        WHERE event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
-                        ORDER BY forecast_id,event_timestamp DESC,event_id DESC
+                        SELECT DISTINCT ON (re.forecast_id)
+                          re.forecast_id,re.event_type,re.pnl_pct,re.event_timestamp
+                        FROM recommendation_events re
+                        JOIN canonical_selections c
+                          ON c.selected_forecast_id=re.forecast_id
+                         AND c.selection_status='SELECTED'
+                        WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+                        ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
                       )
                       SELECT COALESCE(SUM(pnl_pct),0),
                              COALESCE(SUM(pnl_pct) FILTER (WHERE event_type='T2_HIT'),0),
@@ -225,17 +281,26 @@ jobs:
                   cumulative, hits_return, misses_return = cur.fetchone()
 
                   cur.execute("""
-                      WITH issued AS (
-                        SELECT forecast_id, MIN(event_timestamp) FILTER (WHERE event_type='ISSUED') AS issued_at
-                        FROM recommendation_events
-                        GROUP BY forecast_id
+                      WITH selected AS (
+                        SELECT cs.target_trading_date,cs.selected_forecast_id AS forecast_id
+                        FROM canonical_selections cs
+                        WHERE cs.selection_status='SELECTED'
+                          AND cs.selected_forecast_id IS NOT NULL
+                      ),
+                      issued AS (
+                        SELECT re.forecast_id,
+                               MIN(re.event_timestamp) FILTER (WHERE re.event_type='ISSUED') AS issued_at
+                        FROM recommendation_events re
+                        JOIN selected s ON s.forecast_id=re.forecast_id
+                        GROUP BY re.forecast_id
                       ),
                       terminal AS (
-                        SELECT DISTINCT ON (forecast_id)
-                          forecast_id,event_type,event_timestamp,pnl_pct
-                        FROM recommendation_events
-                        WHERE event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
-                        ORDER BY forecast_id,event_timestamp DESC,event_id DESC
+                        SELECT DISTINCT ON (re.forecast_id)
+                          re.forecast_id,re.event_type,re.event_timestamp,re.pnl_pct
+                        FROM recommendation_events re
+                        JOIN selected s ON s.forecast_id=re.forecast_id
+                        WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+                        ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
                       ),
                       resolved AS (
                         SELECT t.*, i.issued_at,
@@ -266,6 +331,11 @@ jobs:
                       ORDER BY day_number
                   """)
                   day_recommendation_rows = cur.fetchall()
+                  assessed_at = max(
+                      timestamp
+                      for timestamp in (forecast_assessed_at,recommendation_as_of)
+                      if timestamp is not None
+                  )
           finally:
               conn.close()
 
@@ -315,6 +385,7 @@ jobs:
               "zone_hit_rate_pct": float(zone_accuracy) if zone_accuracy is not None else None,
               "pending_due_checkpoints": overdue,
               "persistence_integrity_incomplete_forecasts": integrity_incomplete,
+              "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
           }
 
           metrics = {
@@ -340,7 +411,8 @@ jobs:
                   "cumulative_resolved_pnl_pct": float(cumulative or 0),
                   "hit_pnl_pct": float(hits_return or 0),
                   "miss_pnl_pct": float(misses_return or 0),
-                  "method": "sum of resolved standardized model P&L percentages across actionable recommendations",
+                  "method": "sum of resolved standardized model P&L percentages across selected DAILY_CANONICAL actionable recommendations only",
+                  "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
               },
           }
           wins = int((rec or {}).get("wins") or 0)

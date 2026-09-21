@@ -35,3 +35,28 @@ def test_cloudflare_access_secret_names_have_repo_compatible_fallbacks():
     text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
     assert "secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID" in text
     assert "secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET" in text
+
+
+def test_headline_recommendation_efficacy_is_selected_canonical_only():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert "SELECT recommendation_metrics\n                      FROM assessment_snapshots" not in text
+    assert "SELECTED_DAILY_CANONICAL_ONLY" in text
+    assert "JOIN canonical_selections c" in text
+    assert "c.selected_forecast_id=re.forecast_id" in text
+    assert "COUNT(*) FILTER (WHERE s.recommendation='NO_TRADE')" in text
+
+
+def test_headline_returns_exclude_noncanonical_recommendations():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert "selected DAILY_CANONICAL actionable recommendations only" in text
+    terminal_start = text.index("WITH terminal AS (", text.index("population_rule"))
+    terminal_slice = text[terminal_start:terminal_start + 1800]
+    assert "JOIN canonical_selections c" in terminal_slice
+    assert "c.selected_forecast_id=re.forecast_id" in terminal_slice
+
+
+def test_assessment_clock_advances_on_canonical_recommendation_events():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert "recommendation_as_of" in text
+    assert "forecast_assessed_at" in text
+    assert "assessed_at = max(" in text
