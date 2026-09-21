@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
+from src.console_forecast_sync_cli import _validate_handoff
 from src.console_forecast_sync import (
     IST,
     REGIME_WEIGHTS,
@@ -103,3 +104,33 @@ def test_canonical_selection_requires_complete_five_day_path():
     assert "COUNT(DISTINCT df.day_number)=5" in source
     assert "MIN(df.day_number)=1" in source
     assert "MAX(df.day_number)=5" in source
+
+
+def test_console_state_handoff_contract_is_sanitized_and_parseable():
+    now=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    payload={
+        "schema_version":"5DR_CONSOLE_HANDOFF_V1",
+        "generated_at":now,
+        "source":"EDGE_CONSOLE_PUBLISHED_RUNS",
+        "runs":[{
+            "run":{"run_id":"5drrun_demo","published":True,"result":complete_result()},
+            "request":{"request_id":"5drreq_demo","metadata":{
+                "intelligence_handoff":{"normalized":{}},
+                "automated_market_evidence":{},
+            }},
+        }],
+    }
+    runs,requests=_validate_handoff(payload)
+    assert runs[0]["run_id"]=="5drrun_demo"
+    assert requests["5drrun_demo"]["request_id"]=="5drreq_demo"
+
+
+def test_console_state_handoff_rejects_duplicate_run_ids():
+    now=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    entry={"run":{"run_id":"dup","result":complete_result()},"request":{}}
+    payload={"schema_version":"5DR_CONSOLE_HANDOFF_V1","generated_at":now,"runs":[entry,entry]}
+    try:
+        _validate_handoff(payload)
+        assert False, "duplicate run ids must fail closed"
+    except SystemExit as exc:
+        assert "DUPLICATE_RUN_ID" in str(exc)
