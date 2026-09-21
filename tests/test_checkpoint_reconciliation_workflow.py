@@ -33,8 +33,8 @@ def test_assessment_callback_uses_cloudflare_service_credentials():
 
 def test_cloudflare_access_secret_names_have_repo_compatible_fallbacks():
     text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
-    assert "secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID" in text
-    assert "secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET" in text
+    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_ID || secrets.CF_ACCESS_CLIENT_ID" in text
+    assert "secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET || secrets.CF_ACCESS_CLIENT_SECRET" in text
 
 
 def test_headline_recommendation_efficacy_is_selected_canonical_only():
