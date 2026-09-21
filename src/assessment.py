@@ -3,15 +3,10 @@
 Pure functions only. Persistence/reconciliation is handled separately.
 
 V2.2.2 recommendation-lifecycle amendment:
-- every definitive actionable recommendation remains part of the immutable ledger from issuance;
+- every definitive actionable recommendation is part of the ledger from issuance;
 - UNTRIGGERED is no longer a normal current lifecycle state;
 - legacy UNTRIGGERED records are normalized as entry-verification exceptions;
 - forecast scoring rules remain unchanged.
-
-Production efficacy population clarification (21 Sep 2026):
-- raw recommendation aggregation remains available for diagnostics;
-- official headline recommendation efficacy is selected-DAILY_CANONICAL-only;
-- repeated/superseded/intraday recommendations cannot multiply headline denominators or returns.
 """
 
 from __future__ import annotations
@@ -123,14 +118,12 @@ def normalize_recommendation_status(status: str | None) -> str | None:
 
 
 def aggregate_recommendations(records: list[dict]) -> dict:
-    """Aggregate recommendation ledger records for diagnostic/operational analysis.
+    """Aggregate current recommendation ledger records under V2.2.2.
 
-    This raw aggregator intentionally does not decide canonical membership. Official
-    headline efficacy must pass only selected DAILY_CANONICAL records, preferably via
-    aggregate_official_recommendations. Expected keys include recommendation, status,
-    primary_outcome, final_pnl_pct, current_pnl_pct and r_multiple. Legacy
-    UNTRIGGERED records are retained for audit but normalized to
-    ENTRY_NOT_VERIFIABLE for current cumulative metrics.
+    Every definitive actionable call is included from issuance. Expected keys
+    include recommendation, status, primary_outcome, final_pnl_pct,
+    current_pnl_pct and r_multiple. Legacy UNTRIGGERED records are retained for
+    audit but normalized to ENTRY_NOT_VERIFIABLE for current cumulative metrics.
     """
     normalized = []
     for record in records:
@@ -179,26 +172,3 @@ def aggregate_recommendations(records: list[dict]) -> dict:
         "realized_standardized_model_pnl_pct": sum(realized_pnls) if realized_pnls else 0.0,
         "open_standardized_mtm_pct": sum(open_pnls) if open_pnls else 0.0,
     }
-
-
-def aggregate_official_recommendations(records: list[dict]) -> dict:
-    """Aggregate only selected DAILY_CANONICAL recommendation records.
-
-    Canonical membership is fail-closed. A record is eligible only when it carries
-    selection_status == "SELECTED" or is_canonical is True. This prevents repeated
-    runs, superseded candidates and intraday snapshots from multiplying headline
-    Recommendation Accuracy or headline return statistics.
-    """
-    selected = [
-        record
-        for record in records
-        if str(record.get("selection_status") or "").upper() == "SELECTED"
-        or record.get("is_canonical") is True
-    ]
-    result = aggregate_recommendations(selected)
-    result["population_rule"] = "SELECTED_DAILY_CANONICAL_ONLY"
-    result["excluded_noncanonical"] = len(records) - len(selected)
-    result["no_trade_calls"] = sum(
-        1 for record in selected if record.get("recommendation") == "NO_TRADE"
-    )
-    return result
