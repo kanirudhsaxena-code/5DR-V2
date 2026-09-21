@@ -28,10 +28,10 @@ NSE_HOLIDAYS_2026 = {
 }
 
 REGIME_WEIGHTS = {
-    "TREND": {"PRICE_STRUCTURE": 0.40, "PVPO": 0.30, "PARTICIPATION": 0.15, "MACRO_CATALYSTS": 0.15},
-    "RANGE": {"PRICE_STRUCTURE": 0.30, "PVPO": 0.35, "PARTICIPATION": 0.15, "MACRO_CATALYSTS": 0.20},
-    "TRANSITION": {"PRICE_STRUCTURE": 0.35, "PVPO": 0.25, "PARTICIPATION": 0.15, "MACRO_CATALYSTS": 0.25},
-    "EVENT_SHOCK": {"PRICE_STRUCTURE": 0.30, "PVPO": 0.20, "PARTICIPATION": 0.10, "MACRO_CATALYSTS": 0.40},
+    "TREND": {"PRICE_STRUCTURE": 40.0, "PVPO": 30.0, "PARTICIPATION": 15.0, "MACRO_CATALYSTS": 15.0},
+    "RANGE": {"PRICE_STRUCTURE": 30.0, "PVPO": 35.0, "PARTICIPATION": 15.0, "MACRO_CATALYSTS": 20.0},
+    "TRANSITION": {"PRICE_STRUCTURE": 35.0, "PVPO": 25.0, "PARTICIPATION": 15.0, "MACRO_CATALYSTS": 25.0},
+    "EVENT_SHOCK": {"PRICE_STRUCTURE": 30.0, "PVPO": 20.0, "PARTICIPATION": 10.0, "MACRO_CATALYSTS": 40.0},
 }
 
 
@@ -348,7 +348,7 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
                 """
                 INSERT INTO component_scores(
                   forecast_id,component,regime_weight,component_score,raw_detail,evidence_quality,notes
-                ) VALUES (%s,%s,%s,%s,'{}'::jsonb,'VERIFIED',%s)
+                ) VALUES (%s,%s,%s,%s,'{}'::jsonb,'HIGH',%s)
                 """,
                 (
                     forecast_id, component, REGIME_WEIGHTS[regime][component], float(score),
@@ -371,7 +371,7 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
                 _num(execution.get("strike_expiry_fit_score")) or 0,
                 _num(execution.get("liquidity_spread_score")) or 0,
                 _num(execution.get("entry_invalidation_score")) or 0,
-                "NONE" if not tradeable else "NIFTY_OPTION",
+                "NONE" if not tradeable else ("CE" if recommendation=="BUY_CE" else ("PE" if recommendation=="BUY_PE" else "CONVEXITY")),
                 _num(normalized.get("expected_rr")) or 0,
                 "REJECT" if not tradeable else "TRADEABLE",
                 "Imported from complete EDGE Console 5DR run.",
