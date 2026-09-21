@@ -2,6 +2,12 @@ name: 5DR Lifecycle Production Wrapper
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/checkpoint_reconciliation.py'
+      - 'src/checkpoint_reconcile_cli.py'
+      - '.github/workflows/lifecycle-production-wrapper.yml'
   schedule:
     - cron: '15 4-10 * * 1-5'
 
@@ -17,6 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
       LIFECYCLE_WRITES_ENABLED: 'true'
       EVIDENCE_PATH: runtime/evidence.json
     steps:
@@ -27,7 +34,7 @@ jobs:
       - name: Validate activation safety suite
         run: |
           python -m pip install --upgrade pip pytest psycopg2-binary
-          python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py tests/test_production_cli.py
+          python -m pytest -q tests/test_production_activation.py tests/test_evidence_handoff.py tests/test_production_lifecycle_runner.py tests/test_lifecycle_db_adapter.py tests/test_production_cli.py tests/test_checkpoint_reconciliation.py
       - name: Verify production database connection (read-only probe)
         run: |
           test -n "$DATABASE_URL"
@@ -45,6 +52,10 @@ jobs:
           finally:
               conn.close()
           PY
+      - name: Reconcile due canonical NIFTY checkpoints
+        run: |
+          test -n "$UPSTOX_ANALYTICS_TOKEN"
+          python -m src.checkpoint_reconcile_cli | tee checkpoint-reconciliation.json
       - name: Locate governed evidence handoff
         id: evidence
         shell: bash
@@ -74,29 +85,117 @@ jobs:
         if: steps.evidence.outputs.present != 'true'
         run: |
           printf '%s\n' '{"mode":"NO_WRITE","writes_enabled":false,"reason":"NO_EVIDENCE_HANDOFF","database_connection":"CONFIGURED_VIA_SECRET"}' > activation-audit.json
-      - name: Publish latest cumulative assessment to EDGE Console
+      - name: Publish current cumulative assessment to EDGE Console
         env:
           EDGE_CONSOLE_URL: https://edge-console.k-anirudhsaxena.workers.dev
         run: |
           python - <<'PY'
           import json, os, urllib.request
+          from datetime import datetime, timezone
           import psycopg2
 
           conn = psycopg2.connect(os.environ["DATABASE_URL"])
           try:
               with conn.cursor() as cur:
                   cur.execute("""
-                      SELECT forecast_id, assessment_as_of, overall_forecast_metrics,
-                             day_metrics, recommendation_metrics
+                      SELECT selected_forecast_id
+                      FROM canonical_selections
+                      WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+                      ORDER BY target_trading_date DESC
+                      LIMIT 1
+                  """)
+                  source = cur.fetchone()
+                  if not source:
+                      print("assessment_publish_skipped=no_canonical_forecast")
+                      raise SystemExit(0)
+                  forecast_id = source[0]
+
+                  cur.execute("""
+                      WITH canon AS (
+                        SELECT e.*
+                        FROM v_latest_forecast_checkpoint_evaluation e
+                        JOIN canonical_selections c
+                          ON c.selected_forecast_id=e.forecast_id
+                         AND c.selection_status='SELECTED'
+                      )
+                      SELECT day_number,
+                             COUNT(*) FILTER (WHERE evaluation_status='SCORABLE') AS scorable,
+                             COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit) AS hits,
+                             COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit) AS zone_hits,
+                             ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit)
+                                   /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS hit_rate_pct,
+                             ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit)
+                                   /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS zone_hit_rate_pct,
+                             ROUND(AVG(directional_margin_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_margin,
+                             ROUND(AVG(zone_error_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_zone_error,
+                             MAX(evaluated_at) AS last_evaluated_at
+                      FROM canon
+                      GROUP BY day_number
+                      ORDER BY day_number
+                  """)
+                  horizon_rows = cur.fetchall()
+
+                  cur.execute("""
+                      WITH canon AS (
+                        SELECT e.*
+                        FROM v_latest_forecast_checkpoint_evaluation e
+                        JOIN canonical_selections c
+                          ON c.selected_forecast_id=e.forecast_id
+                         AND c.selection_status='SELECTED'
+                        WHERE e.evaluation_status='SCORABLE'
+                      )
+                      SELECT COUNT(*) AS scorable,
+                             COUNT(*) FILTER (WHERE directional_hit) AS hits,
+                             COUNT(*) FILTER (WHERE zone_hit) AS zone_hits,
+                             ROUND(100.0*COUNT(*) FILTER (WHERE directional_hit)/NULLIF(COUNT(*),0),2) AS accuracy,
+                             ROUND(100.0*COUNT(*) FILTER (WHERE zone_hit)/NULLIF(COUNT(*),0),2) AS zone_accuracy,
+                             MAX(evaluated_at) AS assessed_at
+                      FROM canon
+                  """)
+                  scorable, directional_hits, zone_hits, accuracy, zone_accuracy, assessed_at = cur.fetchone()
+                  if assessed_at is None:
+                      print("assessment_publish_skipped=no_scorable_checkpoint")
+                      raise SystemExit(0)
+
+                  cur.execute("""
+                      SELECT COUNT(*)
+                      FROM outcome_checkpoints oc
+                      JOIN canonical_selections c
+                        ON c.selected_forecast_id=oc.forecast_id
+                       AND c.selection_status='SELECTED'
+                      WHERE oc.status='DUE'
+                        AND oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+                  """)
+                  overdue = int(cur.fetchone()[0] or 0)
+
+                  cur.execute("""
+                      WITH selected AS (
+                        SELECT selected_forecast_id AS forecast_id
+                        FROM canonical_selections
+                        WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+                      ),
+                      counts AS (
+                        SELECT s.forecast_id,
+                               (SELECT COUNT(*) FROM daily_forecasts df WHERE df.forecast_id=s.forecast_id) AS daily_count,
+                               (SELECT COUNT(*) FROM outcome_checkpoints oc
+                                  WHERE oc.forecast_id=s.forecast_id
+                                    AND oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')) AS checkpoint_count
+                        FROM selected s
+                      )
+                      SELECT COUNT(*) FILTER (WHERE daily_count<5 OR checkpoint_count<5)
+                      FROM counts
+                  """)
+                  integrity_incomplete = int(cur.fetchone()[0] or 0)
+
+                  cur.execute("""
+                      SELECT recommendation_metrics
                       FROM assessment_snapshots
                       ORDER BY assessment_as_of DESC, assessment_snapshot_id DESC
                       LIMIT 1
                   """)
-                  row = cur.fetchone()
-                  if not row:
-                      print("assessment_publish_skipped=no_snapshot")
-                      raise SystemExit(0)
-                  forecast_id, assessed_at, overall, day_metrics, rec = row
+                  rec_row = cur.fetchone()
+                  rec = rec_row[0] if rec_row and rec_row[0] else {}
+
                   cur.execute("""
                       WITH terminal AS (
                         SELECT DISTINCT ON (forecast_id)
@@ -111,6 +210,7 @@ jobs:
                       FROM terminal
                   """)
                   cumulative, hits_return, misses_return = cur.fetchone()
+
                   cur.execute("""
                       WITH issued AS (
                         SELECT forecast_id, MIN(event_timestamp) FILTER (WHERE event_type='ISSUED') AS issued_at
@@ -156,10 +256,58 @@ jobs:
           finally:
               conn.close()
 
+          day_metrics = {
+              f"D+{d}": {
+                  "status": "NOT DUE",
+                  "scorable": 0,
+                  "hits": 0,
+                  "zone_scorable": 0,
+                  "zone_hits": 0,
+                  "hit_rate_pct": None,
+                  "zone_hit_rate_pct": None,
+                  "avg_directional_margin_points": None,
+                  "avg_zone_error_points": None,
+              }
+              for d in range(1, 6)
+          }
+          for day_number, n, hits, zhits, hit_rate, zrate, avg_margin, avg_zone_error, _ in horizon_rows:
+              day_metrics[f"D+{int(day_number)}"] = {
+                  "status": "SCORABLE" if int(n or 0) else "NOT DUE",
+                  "scorable": int(n or 0),
+                  "hits": int(hits or 0),
+                  "zone_scorable": int(n or 0),
+                  "zone_hits": int(zhits or 0),
+                  "hit_rate_pct": float(hit_rate) if hit_rate is not None else None,
+                  "zone_hit_rate_pct": float(zrate) if zrate is not None else None,
+                  "avg_directional_margin_points": float(avg_margin) if avg_margin is not None else None,
+                  "avg_zone_error_points": float(avg_zone_error) if avg_zone_error is not None else None,
+              }
+
+          scorable = int(scorable or 0)
+          directional_hits = int(directional_hits or 0)
+          zone_hits = int(zone_hits or 0)
+          headline = f"{directional_hits}/{scorable} due canonical checkpoints directionally correct; {zone_hits}/{scorable} zone hits"
+          if overdue:
+              headline += f"; {overdue} overdue checkpoints still pending reconciliation"
+          if integrity_incomplete:
+              headline += f"; {integrity_incomplete} canonical forecast(s) have incomplete frozen persistence"
+
+          overall = {
+              "headline": headline,
+              "canonical_scorable_checkpoints": scorable,
+              "canonical_scorable": scorable,
+              "directional_hits": directional_hits,
+              "zone_hits": zone_hits,
+              "directional_accuracy_pct": float(accuracy) if accuracy is not None else None,
+              "zone_hit_rate_pct": float(zone_accuracy) if zone_accuracy is not None else None,
+              "pending_due_checkpoints": overdue,
+              "persistence_integrity_incomplete_forecasts": integrity_incomplete,
+          }
+
           metrics = {
-              "overall_forecast_metrics": overall or {},
-              "day_metrics": day_metrics or {},
-              "recommendation_metrics": rec or {},
+              "overall_forecast_metrics": overall,
+              "day_metrics": day_metrics,
+              "recommendation_metrics": rec,
               "day_recommendation_metrics": {
                   **{f"D+{d}": {
                       "resolved": 0, "hits": 0, "misses": 0, "hit_rate_pct": None,
@@ -182,17 +330,14 @@ jobs:
                   "method": "sum of resolved standardized model P&L percentages across actionable recommendations",
               },
           }
-          directional_hits = int((overall or {}).get("directional_hits") or 0)
-          scorable = int((overall or {}).get("canonical_scorable_checkpoints") or (overall or {}).get("canonical_scorable") or 0)
           wins = int((rec or {}).get("wins") or 0)
           resolved = int((rec or {}).get("resolved") or 0)
-          headline = (overall or {}).get("headline") or f"{directional_hits}/{scorable} directionally correct"
           payload = {
               "engine": "5DR",
               "forecast_id": forecast_id,
               "assessed_at": assessed_at.isoformat(),
               "outcome": f"{headline}; {wins}/{resolved} resolved recommendations won",
-              "score": (overall or {}).get("directional_accuracy_pct"),
+              "score": float(accuracy) if accuracy is not None else None,
               "metrics": metrics,
           }
           req = urllib.request.Request(
@@ -208,5 +353,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: lifecycle-production-wrapper-audit
-          path: activation-audit.json
+          path: |
+            activation-audit.json
+            checkpoint-reconciliation.json
           retention-days: 30
