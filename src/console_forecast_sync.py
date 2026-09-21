@@ -429,6 +429,20 @@ def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> 
                    AND fg.run_class='CANONICAL_CANDIDATE'
                    AND fg.validity_status='VALID'
                    AND f.run_timestamp BETWEEN fg.canonical_window_open AND fg.canonical_window_close
+                   AND EXISTS (
+                     SELECT 1
+                       FROM daily_forecasts df
+                      WHERE df.forecast_id=fg.forecast_id
+                      GROUP BY df.forecast_id
+                     HAVING COUNT(*)=5
+                        AND COUNT(DISTINCT df.day_number)=5
+                        AND MIN(df.day_number)=1
+                        AND MAX(df.day_number)=5
+                        AND COUNT(*) FILTER (
+                          WHERE df.bias IS NULL OR df.probability IS NULL
+                             OR df.zone_low IS NULL OR df.zone_high IS NULL
+                        )=0
+                   )
                  ORDER BY f.run_timestamp DESC
                 """,
                 (target,),
