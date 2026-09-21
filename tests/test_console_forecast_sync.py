@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
+from src.console_forecast_sync_cli import _validate_handoff
 from src.console_forecast_sync import (
     IST,
     REGIME_WEIGHTS,
@@ -24,22 +25,56 @@ def complete_result():
     }
 
 
-def test_post_close_console_run_becomes_next_session_canonical_candidate():
+def test_previous_day_post_close_run_cannot_become_new_regime_canonical():
     run_at = datetime(2026, 9, 21, 16, 23, tzinfo=IST)
     classification = classify_run(run_at)
     assert classification["target_trading_date"].isoformat() == "2026-09-22"
-    assert classification["run_class"] == "CANONICAL_CANDIDATE"
+    assert classification["run_class"] == "INTRADAY_SNAPSHOT"
+    assert classification["canonical_type"] == "DIAGNOSTIC_SNAPSHOT"
     assert [d.isoformat() for d in classification["daily_dates"]] == [
         "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28"
     ]
 
 
 def test_preopen_run_uses_current_session_as_d1():
-    run_at = datetime(2026, 9, 22, 8, 45, tzinfo=IST)
-    classification = classify_run(run_at)
+    run_at = datetime(2026, 9, 22, 8, 53, tzinfo=IST)
+    request_metadata={"invocation":{"requested_at":"2026-09-22T08:50:00+05:30"}}
+    classification = classify_run(run_at,request_metadata)
     assert classification["target_trading_date"].isoformat() == "2026-09-22"
     assert classification["run_class"] == "CANONICAL_CANDIDATE"
+    assert classification["canonical_type"] == "PREOPEN_CANONICAL"
     assert classification["daily_dates"][0].isoformat() == "2026-09-22"
+
+
+def test_0855_request_can_finish_before_0900_and_remain_preopen_eligible():
+    run_at = datetime(2026, 9, 22, 8, 59, tzinfo=IST)
+    request_metadata={"invocation":{"requested_at":"2026-09-22T08:55:00+05:30"}}
+    classification = classify_run(run_at,request_metadata)
+    assert classification["canonical_type"] == "PREOPEN_CANONICAL"
+    assert classification["run_class"] == "CANONICAL_CANDIDATE"
+
+
+def test_completed_after_0900_cannot_be_preopen_canonical():
+    run_at = datetime(2026, 9, 22, 9, 0, 1, tzinfo=IST)
+    request_metadata={"invocation":{"requested_at":"2026-09-22T08:55:00+05:30"}}
+    classification = classify_run(run_at,request_metadata)
+    assert classification["canonical_type"] == "DIAGNOSTIC_SNAPSHOT"
+    assert classification["run_class"] == "INTRADAY_SNAPSHOT"
+
+
+def test_post_us_close_overnight_run_is_fallback_candidate():
+    run_at = datetime(2026, 9, 22, 2, 45, tzinfo=IST)
+    classification = classify_run(run_at)
+    assert classification["canonical_type"] == "OVERNIGHT_FALLBACK_CANONICAL"
+    assert classification["run_class"] == "CANONICAL_CANDIDATE"
+
+
+def test_legacy_target_preserves_historical_candidate_rule():
+    run_at = datetime(2026, 9, 16, 16, 41, tzinfo=IST)
+    classification = classify_run(run_at)
+    assert classification["target_trading_date"].isoformat() == "2026-09-17"
+    assert classification["canonical_type"] == "LEGACY_CANONICAL"
+    assert classification["run_class"] == "CANONICAL_CANDIDATE"
 
 
 def test_intraday_run_cannot_replace_closed_canonical_candidate():
@@ -47,7 +82,8 @@ def test_intraday_run_cannot_replace_closed_canonical_candidate():
     classification = classify_run(run_at)
     assert classification["target_trading_date"].isoformat() == "2026-09-22"
     assert classification["run_class"] == "INTRADAY_SNAPSHOT"
-    assert classification["daily_dates"][0].isoformat() == "2026-09-23"
+    assert classification["canonical_type"] == "DIAGNOSTIC_SNAPSHOT"
+    assert classification["daily_dates"][0].isoformat() == "2026-09-22"
 
 
 def test_complete_horizon_contract_requires_all_five_frozen_slots():
@@ -103,3 +139,33 @@ def test_canonical_selection_requires_complete_five_day_path():
     assert "COUNT(DISTINCT df.day_number)=5" in source
     assert "MIN(df.day_number)=1" in source
     assert "MAX(df.day_number)=5" in source
+
+
+def test_console_state_handoff_contract_is_sanitized_and_parseable():
+    now=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    payload={
+        "schema_version":"5DR_CONSOLE_HANDOFF_V1",
+        "generated_at":now,
+        "source":"EDGE_CONSOLE_PUBLISHED_RUNS",
+        "runs":[{
+            "run":{"run_id":"5drrun_demo","published":True,"result":complete_result()},
+            "request":{"request_id":"5drreq_demo","metadata":{
+                "intelligence_handoff":{"normalized":{}},
+                "automated_market_evidence":{},
+            }},
+        }],
+    }
+    runs,requests=_validate_handoff(payload)
+    assert runs[0]["run_id"]=="5drrun_demo"
+    assert requests["5drrun_demo"]["request_id"]=="5drreq_demo"
+
+
+def test_console_state_handoff_rejects_duplicate_run_ids():
+    now=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+    entry={"run":{"run_id":"dup","result":complete_result()},"request":{}}
+    payload={"schema_version":"5DR_CONSOLE_HANDOFF_V1","generated_at":now,"runs":[entry,entry]}
+    try:
+        _validate_handoff(payload)
+        assert False, "duplicate run ids must fail closed"
+    except SystemExit as exc:
+        assert "DUPLICATE_RUN_ID" in str(exc)
