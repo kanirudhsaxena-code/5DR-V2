@@ -348,6 +348,15 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
         return None
     if result.get("model_version") != "5DR_V2_1" or result.get("output_contract_version") != "5DR_V2_1_2":
         return None
+    forecast_assessment = str(result.get("forecast_assessment") or "").strip()
+    recommendation_assessment = str(result.get("recommendation_assessment") or "").strip()
+    snapshot = result.get("assessment_snapshot")
+    if not forecast_assessment or not recommendation_assessment:
+        return None
+    if result.get("assessment_snapshot_complete") is not True or result.get("recommendation_ledger_complete") is not True:
+        return None
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("metrics"), dict):
+        return None
     timestamp = datetime.fromisoformat(str(run.get("generated_at") or "").replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
         return None
@@ -379,13 +388,25 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
         return None
     definitive = _headline_direction(str(result.get("directional_label") or ""))
     tradeable = result.get("tradeable") is True
-    recommendation = "NO_TRADE"
-    if tradeable:
-        recommendation = "BUY_CE" if definitive == "BULLISH" else ("BUY_PE" if definitive == "BEARISH" else "BUY_CONVEXITY")
+    recommendation = str(result.get("recommendation") or "")
+    if recommendation not in {"BUY_CE","BUY_PE","BUY_CONVEXITY","NO_TRADE"}:
+        return None
     blockers = result.get("tradeability_blockers")
     blocker_text = ", ".join(map(str, blockers)) if isinstance(blockers, list) and blockers else None
-    zone_low = min(slot["zone_low"] for slot in slots.values())
-    zone_high = max(slot["zone_high"] for slot in slots.values())
+    overall_zone = result.get("expected_nifty_zone")
+    if not isinstance(overall_zone, dict):
+        return None
+    zone_low = _num(overall_zone.get("low"))
+    zone_high = _num(overall_zone.get("high"))
+    if zone_low is None or zone_high is None or zone_low <= 0 or zone_high < zone_low:
+        return None
+    event_result = result.get("event_shock")
+    if not isinstance(event_result, dict):
+        return None
+    event_transmission = str(event_result.get("transmission") or "")
+    convexity_warranted = event_result.get("convexity_warranted")
+    if event_transmission not in {"BULLISH","BEARISH","TWO_SIDED"} or not isinstance(convexity_warranted, bool):
+        return None
     raw_hash = hashlib.sha256(json.dumps(run, sort_keys=True, separators=(",",":"), default=str).encode()).hexdigest()
 
     with conn.cursor() as cur:
@@ -428,16 +449,16 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
               directional_trade,recommendation,tradeability_failure_reason,committed_at,record_hash,
               forecast_assessment,recommendation_assessment,output_contract_version
             ) VALUES (
-              %s,%s,%s,'5DR_V2_1',%s,%s,'5D',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'UNKNOWN',
-              false,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'
+              %s,%s,%s,'5DR_V2_1',%s,%s,'5D',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+              %s,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'
             )
             """,
             (
                 forecast_id, predecessor, db_run_id, timestamp, spot, regime, des5, definitive,
                 bull, range_prob, bear, zone_low, zone_high, trust, result.get("market_trust_band"),
-                event_shock, tradeable, recommendation, blocker_text, raw_hash,
-                "Imported from a governed published EDGE Console 5DR run with complete D+1..D+5 path.",
-                "Tradeability gate passed." if tradeable else (blocker_text or "NO_TRADE"),
+                event_shock, event_transmission, convexity_warranted,
+                tradeable, recommendation, blocker_text, raw_hash,
+                forecast_assessment, recommendation_assessment,
             ),
         )
 
@@ -497,6 +518,43 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
                 _num(normalized.get("expected_rr")) or 0,
                 "REJECT" if not tradeable else "TRADEABLE",
                 "Imported from complete EDGE Console 5DR run.",
+            ),
+        )
+
+        snapshot_metrics = snapshot["metrics"]
+        day_source = snapshot_metrics.get("day_metrics")
+        ledger = snapshot_metrics.get("recommendation_ledger")
+        if not isinstance(day_source, dict) or not isinstance(ledger, list):
+            raise ValueError("complete V2.1.2 assessment snapshot is required")
+        remapped_day_metrics = {
+            "D+1": day_source.get("D"),
+            "D+2": day_source.get("D+1"),
+            "D+3": day_source.get("D+2"),
+            "D+4": day_source.get("D+3"),
+            "D+5": day_source.get("D+4"),
+        }
+        if any(not isinstance(value, dict) for value in remapped_day_metrics.values()):
+            raise ValueError("complete V2.1.2 day assessment metrics are required")
+        assessed_at_raw = str(snapshot.get("assessed_at") or "")
+        assessed_at = datetime.fromisoformat(assessed_at_raw.replace("Z","+00:00"))
+        if assessed_at.tzinfo is None:
+            raise ValueError("assessment snapshot timestamp must be timezone-aware")
+        cur.execute(
+            """
+            INSERT INTO assessment_snapshots(
+              run_id,forecast_id,output_contract_version,assessment_as_of,reconciled_through,
+              overall_forecast_metrics,day_metrics,recommendation_metrics,recommendation_ledger,
+              all_recommendations_count,no_trade_metrics,completeness_status
+            ) VALUES (%s,%s,'5DR_V2_1_2',%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s::jsonb,'COMPLETE')
+            """,
+            (
+                db_run_id, forecast_id, assessed_at, assessed_at,
+                json.dumps(snapshot_metrics.get("overall_forecast_metrics") or {}, default=str),
+                json.dumps(remapped_day_metrics, default=str),
+                json.dumps(snapshot_metrics.get("recommendation_metrics") or {}, default=str),
+                json.dumps(ledger, default=str),
+                len(ledger),
+                json.dumps(snapshot_metrics.get("no_trade_metrics") or {}, default=str),
             ),
         )
 
