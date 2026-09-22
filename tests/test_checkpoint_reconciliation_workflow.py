@@ -85,3 +85,11 @@ def test_assessment_handoff_exposes_canonical_regime_metadata():
     assert '"governance_era": governance_era' in text
     assert 'LEGACY_CANONICAL' in text
     assert 'POST_GOVERNANCE' in text
+
+
+def test_assessment_presents_canonical_horizons_as_d_through_d_plus_4():
+    text = Path(".github/workflows/lifecycle-production-wrapper.yml").read_text(encoding="utf-8")
+    assert 'def horizon_label(day_number: int) -> str:' in text
+    assert 'return "D" if int(day_number)==1 else f"D+{int(day_number)-1}"' in text
+    assert 'day_metrics[horizon_label(int(day_number))]' in text
+    assert '**{horizon_label(d): {' in text
