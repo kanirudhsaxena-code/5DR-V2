@@ -546,6 +546,12 @@ jobs:
                   "method": "sum of resolved standardized model P&L percentages across selected DAILY_CANONICAL actionable recommendations only",
                   "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
               },
+              "recommendation_ledger": recommendation_ledger,
+              "all_recommendations_count": len(recommendation_ledger),
+              "recommendation_ledger_complete": True,
+              "assessment_snapshot_complete": all(
+                  key in day_metrics for key in ("D","D+1","D+2","D+3","D+4")
+              ),
           }
           wins = int((rec or {}).get("wins") or 0)
           resolved = int((rec or {}).get("resolved") or 0)
