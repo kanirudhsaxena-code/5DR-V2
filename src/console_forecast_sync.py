@@ -314,6 +314,21 @@ def _existing_import(conn, console_run_id: str) -> str | None:
     return row[0] if row else None
 
 
+def _daily_scenario_columns_available(conn) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)
+              FROM information_schema.columns
+             WHERE table_schema='public'
+               AND table_name='daily_forecasts'
+               AND column_name IN ('bull_probability','range_probability','bear_probability')
+            """
+        )
+        row = cur.fetchone()
+    return bool(row and int(row[0]) == 3)
+
+
 def _forecast_id(console_run_id: str, run_timestamp: datetime) -> str:
     suffix = console_run_id.replace("5drrun_", "").replace("-", "")[:10]
     local = run_timestamp.astimezone(IST)
@@ -376,6 +391,7 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
         return None
 
     classification = classify_run(timestamp, metadata)
+    scenario_columns_available = _daily_scenario_columns_available(conn)
     forecast_id = _forecast_id(console_run_id, timestamp)
     probs = result.get("probabilities") or {}
     bull = _num(probs.get("BULL"))
@@ -464,25 +480,38 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
 
         for index, horizon in enumerate(HORIZONS, start=1):
             slot = slots[horizon]
-            cur.execute(
-                """
-                INSERT INTO daily_forecasts(
-                  forecast_id,day_number,trading_date,bias,probability,zone_low,zone_high,key_event_risk,notes
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    forecast_id, index, classification["daily_dates"][index-1], slot["direction"],
-                    slot["probability"], slot["zone_low"], slot["zone_high"], event_shock,
-                    (
-                        (slot["basis"] or "")
-                        + (
-                            f" | scenario_probabilities=BULL:{slot['bull_probability']:.3f},RANGE:{slot['range_probability']:.3f},BEAR:{slot['bear_probability']:.3f}"
-                            if slot["bull_probability"] is not None
-                            else " | legacy_single_probability"
-                        )
-                    ).strip(),
-                ),
+            scenario_note = (
+                f"scenario_probabilities=BULL:{slot['bull_probability']:.3f},RANGE:{slot['range_probability']:.3f},BEAR:{slot['bear_probability']:.3f}"
+                if slot["bull_probability"] is not None
+                else "legacy_single_probability"
             )
+            note_text = ((slot["basis"] or "") + " | " + scenario_note).strip(" |")
+            if scenario_columns_available and slot["bull_probability"] is not None:
+                cur.execute(
+                    """
+                    INSERT INTO daily_forecasts(
+                      forecast_id,day_number,trading_date,bias,probability,zone_low,zone_high,key_event_risk,notes,
+                      bull_probability,range_probability,bear_probability
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        forecast_id, index, classification["daily_dates"][index-1], slot["direction"],
+                        slot["probability"], slot["zone_low"], slot["zone_high"], event_shock, note_text,
+                        slot["bull_probability"], slot["range_probability"], slot["bear_probability"],
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO daily_forecasts(
+                      forecast_id,day_number,trading_date,bias,probability,zone_low,zone_high,key_event_risk,notes
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        forecast_id, index, classification["daily_dates"][index-1], slot["direction"],
+                        slot["probability"], slot["zone_low"], slot["zone_high"], event_shock, note_text,
+                    ),
+                )
 
         for component, score in (normalized.get("component_scores") or {}).items():
             if component not in REGIME_WEIGHTS[regime] or _num(score) is None:
