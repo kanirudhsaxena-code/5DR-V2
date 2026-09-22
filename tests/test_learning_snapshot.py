@@ -31,6 +31,7 @@ def test_observation_envelope_maps_internal_horizon_and_requires_exclusion_reaso
                 official_efficacy_eligible=False,
                 target_trading_date="2026-09-22",
                 source_ref="run:r1",
+                observed_at="2026-09-22T15:30:00+05:30",
             ),
         )
     row = build_observation_envelope(
@@ -41,11 +42,13 @@ def test_observation_envelope_maps_internal_horizon_and_requires_exclusion_reaso
             official_efficacy_eligible=False,
             target_trading_date="2026-09-22",
             source_ref="run:r1",
+            observed_at="2026-09-22T15:30:00+05:30",
             exclusion_reason="NON_CANONICAL",
         ),
     )
     assert row["horizon"] == "D"
     assert row["source_horizon"] == "D+1"
+    assert row["observed_at"] == "2026-09-22T15:30:00+05:30"
     assert row["production_change_allowed"] is False
 
 
