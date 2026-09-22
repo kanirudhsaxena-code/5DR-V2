@@ -261,6 +261,17 @@ def build_run_envelope(
         "forecast_assessment": forecast_assessment,
         "recommendation_assessment": recommendation_assessment,
         "recommendation": recommendation,
+        "forecast_horizon": "D+5",
+        "expected_nifty_zone": {
+            "low": float(result["horizon_slots"]["D+5"]["zone_low"]),
+            "high": float(result["horizon_slots"]["D+5"]["zone_high"]),
+        },
+        "event_shock": {
+            "level": str(data.get("event_shock") or "UNKNOWN"),
+            "transmission": str(data.get("event_transmission") or "UNKNOWN"),
+            "convexity_warranted": data.get("convexity_warranted") if isinstance(data.get("convexity_warranted"), bool) else None,
+            "kill_switch": bool(data.get("event_kill_switch")),
+        },
         "assessment_snapshot_complete": snapshot is not None,
         "recommendation_ledger_complete": (
             snapshot is not None
