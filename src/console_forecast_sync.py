@@ -198,6 +198,12 @@ def _num(value) -> float | None:
 
 
 def complete_horizon_slots(result: dict) -> dict | None:
+    """Validate the immutable D+1..D+5 path.
+
+    New production runs carry a full BULL/RANGE/BEAR probability vector for each
+    horizon. Legacy single-probability slots remain readable for historical
+    compatibility, but only the selected probability can be retained from those rows.
+    """
     slots = result.get("horizon_slots")
     if not isinstance(slots, dict):
         return None
@@ -207,22 +213,48 @@ def complete_horizon_slots(result: dict) -> dict | None:
         if not isinstance(slot, dict):
             return None
         direction = str(slot.get("direction") or "")
-        probability = _num(slot.get("probability"))
         low = _num(slot.get("zone_low"))
         high = _num(slot.get("zone_high"))
-        if direction not in DIRECTIONS or probability is None or not 0 <= probability <= 100:
+        if direction not in DIRECTIONS:
             return None
         if low is None or high is None or low <= 0 or high < low:
             return None
+
+        scenario = slot.get("probabilities")
+        bull = range_prob = bear = None
+        if isinstance(scenario, dict):
+            bull = _num(scenario.get("BULL"))
+            range_prob = _num(scenario.get("RANGE"))
+            bear = _num(scenario.get("BEAR"))
+            if None in (bull, range_prob, bear):
+                return None
+            if any(value < 0 or value > 100 for value in (bull, range_prob, bear)):
+                return None
+            if abs((bull + range_prob + bear) - 100.0) > 0.02:
+                return None
+            selected_key = "BULL" if direction == "BULLISH" else ("BEAR" if direction == "BEARISH" else "RANGE")
+            selected = {"BULL": bull, "RANGE": range_prob, "BEAR": bear}[selected_key]
+            if abs(selected - max(bull, range_prob, bear)) > 0.02:
+                return None
+            probability = selected
+        else:
+            # Historical compatibility only. New Console production no longer emits
+            # a standalone confidence probability.
+            probability = _num(slot.get("probability"))
+            if probability is None or not 0 <= probability <= 100:
+                return None
+
         clean[horizon] = {
             "direction": direction,
             "probability": probability,
+            "bull_probability": bull,
+            "range_probability": range_prob,
+            "bear_probability": bear,
             "zone_low": low,
             "zone_high": high,
             "basis": str(slot.get("basis") or "").strip() or None,
         }
     return clean
-
 
 def _spot_from_metadata(metadata: dict) -> float | None:
     evidence = metadata.get("automated_market_evidence")
@@ -419,7 +451,15 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
                 """,
                 (
                     forecast_id, index, classification["daily_dates"][index-1], slot["direction"],
-                    slot["probability"], slot["zone_low"], slot["zone_high"], event_shock, slot["basis"],
+                    slot["probability"], slot["zone_low"], slot["zone_high"], event_shock,
+                    (
+                        (slot["basis"] or "")
+                        + (
+                            f" | scenario_probabilities=BULL:{slot['bull_probability']:.3f},RANGE:{slot['range_probability']:.3f},BEAR:{slot['bear_probability']:.3f}"
+                            if slot["bull_probability"] is not None
+                            else " | legacy_single_probability"
+                        )
+                    ).strip(),
                 ),
             )
 
