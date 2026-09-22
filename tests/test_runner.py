@@ -20,7 +20,9 @@ def _payload():
             "closing_confirmation": 80,
             "evidence_freshness_completeness": 90,
         },
-        "event_shock": "NORMAL",
+        "event_shock": "LOW",
+        "event_transmission": "TWO_SIDED",
+        "convexity_warranted": False,
         "execution_inputs": {
             "rr_score": 80,
             "premium_iv_theta_score": 70,
@@ -92,6 +94,8 @@ def test_runner_emits_console_release_envelope():
     assert "DES5" in envelope["result"]["forecast_assessment"]
     assert "Single Tradeability Gate" in envelope["result"]["recommendation_assessment"]
     assert envelope["result"]["horizon_slots"]["D+1"]["probabilities"]["BULL"] == 55
+    assert envelope["result"]["expected_nifty_zone"] == {"low": 22900.0, "high": 23550.0}
+    assert envelope["result"]["event_shock"]["level"] == "LOW"
 
 
 def test_runner_cli_fails_closed_on_missing_evidence(tmp_path, capsys):
