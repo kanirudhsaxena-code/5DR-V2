@@ -1,0 +1,33 @@
+name: One-time 22 Sep NIFTY Canonical Sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/exception-nifty-sync-20260922.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EDGE_CONSOLE_HANDOFF_URL: https://raw.githubusercontent.com/kanirudhsaxena-code/EDGE-CONSOLE/state/5dr-handoff/runtime/5dr-canonical-handoff.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Import exact governed Console handoff
+        run: |
+          python -m pip install --quiet psycopg2-binary
+          python -m src.console_forecast_sync_cli | tee exception-nifty-sync.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exception-nifty-sync-20260922
+          path: exception-nifty-sync.json
+          retention-days: 30
