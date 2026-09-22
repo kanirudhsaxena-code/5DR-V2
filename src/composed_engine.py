@@ -43,6 +43,8 @@ def domain_execute(request: EngineRequest) -> Dict[str, Any]:
     directional_score = des5(data["component_scores"], data["regime"])
     trust_score = market_trust(data["market_trust_inputs"])
     scenario_probabilities = probabilities(directional_score, trust_score, data["event_shock"])
+    winning_scenario = max(("BULL", "RANGE", "BEAR"), key=lambda key: scenario_probabilities[key])
+    definitive_forecast = {"BULL": "BULLISH", "RANGE": "RANGE", "BEAR": "BEARISH"}[winning_scenario]
     edge_score = execution_edge(data["execution_inputs"])
     is_tradeable, blockers = tradeability(
         data_adequate=bool(data["data_adequate"]),
@@ -64,6 +66,7 @@ def domain_execute(request: EngineRequest) -> Dict[str, Any]:
         "regime": data["regime"],
         "des5": directional_score,
         "directional_label": directional_label(directional_score),
+        "definitive_forecast": definitive_forecast,
         "market_trust": trust_score,
         "market_trust_band": trust_band(trust_score),
         "probabilities": scenario_probabilities,
