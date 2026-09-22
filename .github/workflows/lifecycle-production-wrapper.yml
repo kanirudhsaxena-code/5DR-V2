@@ -382,8 +382,11 @@ jobs:
           finally:
               conn.close()
 
+          def horizon_label(day_number: int) -> str:
+              return "D" if int(day_number)==1 else f"D+{int(day_number)-1}"
+
           day_metrics = {
-              f"D+{d}": {
+              horizon_label(d): {
                   "status": "NOT DUE",
                   "eligible_matured": 0,
                   "scorable": 0,
@@ -400,7 +403,7 @@ jobs:
               for d in range(1, 6)
           }
           for day_number, n, hits, zhits, hit_rate, zrate, avg_margin, avg_zone_error, _ in horizon_rows:
-              day_metrics[f"D+{int(day_number)}"] = {
+              day_metrics[horizon_label(int(day_number))] = {
                   "status": "SCORABLE" if int(n or 0) else "NOT DUE",
                   "scorable": int(n or 0),
                   "hits": int(hits or 0),
@@ -413,7 +416,7 @@ jobs:
               }
 
           for day_number in range(1,6):
-              key=f"D+{day_number}"
+              key=horizon_label(day_number)
               eligible=int(eligible_by_day.get(day_number,0))
               scored=int(day_metrics[key].get("scorable") or 0)
               day_metrics[key]["eligible_matured"]=eligible
@@ -429,7 +432,7 @@ jobs:
           scorable = int(scorable or 0)
           directional_hits = int(directional_hits or 0)
           zone_hits = int(zone_hits or 0)
-          eligible_matured_total = sum(int(day_metrics[f"D+{d}"]["eligible_matured"] or 0) for d in range(1,6))
+          eligible_matured_total = sum(int(day_metrics[horizon_label(d)]["eligible_matured"] or 0) for d in range(1,6))
           missing_unscorable_total = max(eligible_matured_total-scorable,0)
           scorable_coverage_pct = round(100.0*scorable/eligible_matured_total,2) if eligible_matured_total else None
           headline = f"{directional_hits}/{scorable} scorable canonical checkpoints directionally correct; {zone_hits}/{scorable} zone hits"
@@ -462,11 +465,11 @@ jobs:
               "day_metrics": day_metrics,
               "recommendation_metrics": rec,
               "day_recommendation_metrics": {
-                  **{f"D+{d}": {
+                  **{horizon_label(d): {
                       "resolved": 0, "hits": 0, "misses": 0, "hit_rate_pct": None,
                       "overall_pnl_pct": None, "hit_pnl_pct": None, "miss_pnl_pct": None,
                   } for d in range(1, 6)},
-                  **{f"D+{int(day_number)}": {
+                  **{horizon_label(int(day_number)): {
                       "resolved": int(resolved_count),
                       "hits": int(hit_count),
                       "misses": int(miss_count),
