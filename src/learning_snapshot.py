@@ -30,6 +30,7 @@ class LearningRunContext:
     official_efficacy_eligible: bool
     target_trading_date: str
     source_ref: str
+    observed_at: str
     exclusion_reason: str | None = None
 
     def validate(self) -> None:
@@ -41,6 +42,8 @@ class LearningRunContext:
             raise ValueError("target_trading_date is mandatory")
         if not self.source_ref:
             raise ValueError("source_ref is mandatory")
+        if not self.observed_at:
+            raise ValueError("observed_at is mandatory")
         if not self.official_efficacy_eligible and not self.exclusion_reason:
             raise ValueError("non-official observations require an exclusion_reason")
 
@@ -85,6 +88,7 @@ def build_observation_envelope(observation: Mapping[str, Any], context: Learning
         "confidence": observation.get("confidence"),
         "exclusion_reason": context.exclusion_reason,
         "source_ref": context.source_ref,
+        "observed_at": context.observed_at,
         "production_change_allowed": False,
     }
     return envelope
