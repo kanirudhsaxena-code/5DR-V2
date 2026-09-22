@@ -1,8 +1,11 @@
 """5DR release-contract validation.
 
 V2.1.1 is retained as a historical contract. New production releases use
-V2.1.2 and must persist an assessment-first snapshot.
+V2.1.2 and must persist an assessment-first snapshot plus the frozen
+22-Sep-2026 day-wise three-scenario probability vectors.
 """
+
+from .engine_contract import validate_horizon_slots
 
 LEGACY_OUTPUT_CONTRACT_VERSION = "5DR_V2_1_1"
 OUTPUT_CONTRACT_VERSION = "5DR_V2_1_2"
@@ -42,9 +45,10 @@ def validate_output_contract(
         raise ValueError("5DR V2.1.2 release blocked: Recommendation Assessment is mandatory")
     if not assessment_snapshot_complete:
         raise ValueError("5DR V2.1.2 release blocked: assessment snapshot is mandatory")
-    required = {"D+1", "D+2", "D+3", "D+4", "D+5"}
-    if not isinstance(horizon_slots, dict) or not required.issubset(horizon_slots):
-        raise ValueError("5DR V2.1.2 release blocked: D+1 through D+5 assessment slots are mandatory")
+    try:
+        validate_horizon_slots(horizon_slots)
+    except ValueError as exc:
+        raise ValueError(f"5DR V2.1.2 release blocked: {exc}") from exc
     if not recommendation_ledger_complete:
         raise ValueError("5DR V2.1.2 release blocked: recommendation ledger is incomplete")
     return True

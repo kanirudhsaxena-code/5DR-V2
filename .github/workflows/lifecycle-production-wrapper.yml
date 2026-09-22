@@ -374,6 +374,66 @@ jobs:
                       ORDER BY day_number
                   """)
                   day_recommendation_rows = cur.fetchall()
+
+                  cur.execute("""
+                      WITH latest_event AS (
+                        SELECT DISTINCT ON (re.forecast_id)
+                          re.forecast_id,re.event_type,re.event_timestamp,re.premium,re.pnl_pct,re.r_multiple
+                        FROM recommendation_events re
+                        ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+                      ),
+                      canonical AS (
+                        SELECT selected_forecast_id AS forecast_id,target_trading_date
+                        FROM canonical_selections
+                        WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+                      )
+                      SELECT f.forecast_id,f.run_timestamp,f.definitive_forecast,f.recommendation,
+                             f.bull_probability,f.range_probability,f.bear_probability,
+                             ep.instrument,ep.strike,ep.expiry,ep.entry_low,ep.entry_high,
+                             ep.stop_premium,ep.target1_premium,ep.target2_premium,ep.expected_rr,
+                             le.event_type,le.event_timestamp,le.premium,le.pnl_pct,le.r_multiple,
+                             c.target_trading_date
+                      FROM forecasts f
+                      LEFT JOIN execution_plans ep USING (forecast_id)
+                      LEFT JOIN latest_event le USING (forecast_id)
+                      LEFT JOIN canonical c USING (forecast_id)
+                      WHERE f.model_version='5DR_V2_1'
+                      ORDER BY f.run_timestamp
+                  """)
+                  recommendation_ledger_rows = cur.fetchall()
+                  recommendation_ledger = [
+                      {
+                          "forecast_id": row[0],
+                          "run_timestamp": row[1].isoformat() if row[1] else None,
+                          "definitive_forecast": row[2],
+                          "recommendation": row[3],
+                          "probabilities": {
+                              "BULL": float(row[4]),
+                              "RANGE": float(row[5]),
+                              "BEAR": float(row[6]),
+                          },
+                          "execution": {
+                              "instrument": row[7],
+                              "strike": float(row[8]) if row[8] is not None else None,
+                              "expiry": row[9].isoformat() if row[9] else None,
+                              "entry_low": float(row[10]) if row[10] is not None else None,
+                              "entry_high": float(row[11]) if row[11] is not None else None,
+                              "stop": float(row[12]) if row[12] is not None else None,
+                              "target1": float(row[13]) if row[13] is not None else None,
+                              "target2": float(row[14]) if row[14] is not None else None,
+                              "expected_rr": float(row[15]) if row[15] is not None else None,
+                          },
+                          "lifecycle": {
+                              "latest_event": row[16] or ("NO_TRADE" if row[3]=="NO_TRADE" else "ENTRY_NOT_VERIFIABLE"),
+                              "event_timestamp": row[17].isoformat() if row[17] else None,
+                              "premium": float(row[18]) if row[18] is not None else None,
+                              "pnl_pct": float(row[19]) if row[19] is not None else None,
+                              "r_multiple": float(row[20]) if row[20] is not None else None,
+                          },
+                          "canonical_target_trading_date": row[21].isoformat() if row[21] else None,
+                      }
+                      for row in recommendation_ledger_rows
+                  ]
                   assessed_at = max(
                       timestamp
                       for timestamp in (forecast_assessed_at,recommendation_as_of)
@@ -486,6 +546,12 @@ jobs:
                   "method": "sum of resolved standardized model P&L percentages across selected DAILY_CANONICAL actionable recommendations only",
                   "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
               },
+              "recommendation_ledger": recommendation_ledger,
+              "all_recommendations_count": len(recommendation_ledger),
+              "recommendation_ledger_complete": True,
+              "assessment_snapshot_complete": all(
+                  key in day_metrics for key in ("D","D+1","D+2","D+3","D+4")
+              ),
           }
           wins = int((rec or {}).get("wins") or 0)
           resolved = int((rec or {}).get("resolved") or 0)

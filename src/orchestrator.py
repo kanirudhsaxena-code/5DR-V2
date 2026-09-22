@@ -13,6 +13,7 @@ from .engine_contract import (
     OUTPUT_CONTRACT_VERSION,
     REQUIRED_HORIZONS,
     validate_engine_request,
+    validate_horizon_slots,
 )
 
 
@@ -31,10 +32,6 @@ def execute(request: EngineRequest, domain_executor: DomainExecutor) -> Dict[str
         raise ValueError("5DR execution blocked: invalid output contract version")
 
     slots = result.get("horizon_slots", {})
-    if not isinstance(slots, dict):
-        raise ValueError("5DR execution blocked: horizon_slots must be an object")
-    missing = [slot for slot in REQUIRED_HORIZONS if slot not in slots]
-    if missing:
-        raise ValueError(f"5DR execution blocked: missing horizon slots {missing}")
+    validate_horizon_slots(slots)
 
     return result

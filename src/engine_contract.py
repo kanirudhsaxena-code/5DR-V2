@@ -11,6 +11,41 @@ from typing import Any, Dict, List
 MODEL_VERSION = "5DR_V2_1"
 OUTPUT_CONTRACT_VERSION = "5DR_V2_1_2"
 REQUIRED_HORIZONS = ("D+1", "D+2", "D+3", "D+4", "D+5")
+SCENARIOS = ("BULL", "RANGE", "BEAR")
+HORIZON_DIRECTIONS = {"BULLISH": "BULL", "RANGE": "RANGE", "BEARISH": "BEAR"}
+
+
+def validate_horizon_slots(slots: Any) -> bool:
+    if not isinstance(slots, dict) or set(slots) != set(REQUIRED_HORIZONS):
+        raise ValueError("5DR execution blocked: horizon_slots must contain exactly D+1 through D+5")
+    for horizon in REQUIRED_HORIZONS:
+        slot = slots[horizon]
+        if not isinstance(slot, dict):
+            raise ValueError(f"5DR execution blocked: {horizon} slot must be an object")
+        direction = slot.get("direction")
+        if direction not in HORIZON_DIRECTIONS:
+            raise ValueError(f"5DR execution blocked: {horizon} direction must be BULLISH, RANGE or BEARISH")
+        probs = slot.get("probabilities")
+        if not isinstance(probs, dict) or set(probs) != set(SCENARIOS):
+            raise ValueError(f"5DR execution blocked: {horizon} probabilities must contain exactly BULL, RANGE and BEAR")
+        try:
+            values = {key: float(probs[key]) for key in SCENARIOS}
+            low = float(slot["zone_low"])
+            high = float(slot["zone_high"])
+        except (TypeError, ValueError, KeyError):
+            raise ValueError(f"5DR execution blocked: {horizon} scenario probabilities and zone must be numeric")
+        if any(value < 0 or value > 100 for value in values.values()):
+            raise ValueError(f"5DR execution blocked: {horizon} scenario probabilities must be 0..100")
+        if abs(sum(values.values()) - 100.0) > 0.02:
+            raise ValueError(f"5DR execution blocked: {horizon} scenario probabilities must total 100")
+        selected = values[HORIZON_DIRECTIONS[direction]]
+        if abs(selected - max(values.values())) > 0.02:
+            raise ValueError(f"5DR execution blocked: {horizon} direction must match the highest scenario probability")
+        if low <= 0 or high < low:
+            raise ValueError(f"5DR execution blocked: {horizon} requires positive zone_low <= zone_high")
+        if not isinstance(slot.get("basis"), str) or not slot["basis"].strip():
+            raise ValueError(f"5DR execution blocked: {horizon} evidence basis is mandatory")
+    return True
 
 
 @dataclass(frozen=True)
