@@ -1,1 +1,1 @@
-2026-09-22 portfolio close request retry 2\n
+2026-09-22 portfolio close batched quote\n
