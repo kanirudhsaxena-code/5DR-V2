@@ -15,7 +15,7 @@ def complete_result():
         "horizon_slots": {
             f"D+{day}": {
                 "direction": "RANGE",
-                "probability": 50 + day,
+                "probabilities": {"BULL": 25, "RANGE": 50, "BEAR": 25},
                 "zone_low": 23000 + day * 10,
                 "zone_high": 23500 + day * 10,
                 "basis": f"day {day}",
@@ -169,3 +169,24 @@ def test_console_state_handoff_rejects_duplicate_run_ids():
         assert False, "duplicate run ids must fail closed"
     except SystemExit as exc:
         assert "DUPLICATE_RUN_ID" in str(exc)
+
+
+def test_post_amendment_horizon_contract_rejects_legacy_single_probability():
+    legacy = complete_result()
+    legacy["horizon_slots"]["D+5"] = {
+        "direction": "BULLISH",
+        "probability": 35,
+        "zone_low": 23250,
+        "zone_high": 23600,
+        "basis": "legacy confidence",
+    }
+    assert complete_horizon_slots(legacy) is None
+    assert complete_horizon_slots(legacy, allow_legacy=True) is not None
+
+
+def test_canonical_selection_requires_post_amendment_scenario_vectors():
+    source = Path("src/console_forecast_sync.py").read_text(encoding="utf-8")
+    assert "df.bull_probability IS NULL" in source
+    assert "df.range_probability IS NULL" in source
+    assert "df.bear_probability IS NULL" in source
+    assert "target_trading_date >= DATE '2026-09-22'" in source
