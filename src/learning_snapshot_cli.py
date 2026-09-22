@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from src.learning_observations import efficacy_observation, recommendation_observation
@@ -188,7 +189,7 @@ def main() -> int:
         challengers.extend({"status":"VALIDATING"} for _ in range(remaining))
         hypotheses=[{"status":"HYPOTHESIS"} for _ in range(hypothesis_count)]
         snapshot=build_daily_snapshot(
-            cycle_id=f"5DR-LL-{now.astimezone().date().isoformat()}",
+            cycle_id=f"5DR-LL-{now.astimezone(ZoneInfo('Asia/Kolkata')).date().isoformat()}",
             as_of=now.isoformat(),
             runs=normalized_runs,
             observations=observations,
