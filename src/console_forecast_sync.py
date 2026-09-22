@@ -197,12 +197,12 @@ def _num(value) -> float | None:
     return value if value == value else None
 
 
-def complete_horizon_slots(result: dict) -> dict | None:
+def complete_horizon_slots(result: dict, *, allow_legacy: bool = False) -> dict | None:
     """Validate the immutable D+1..D+5 path.
 
-    New production runs carry a full BULL/RANGE/BEAR probability vector for each
-    horizon. Legacy single-probability slots remain readable for historical
-    compatibility, but only the selected probability can be retained from those rows.
+    Post-amendment production requires a complete BULL/RANGE/BEAR vector for every
+    horizon. Historical pre-22-Sep-2026 rows may be read with allow_legacy=True,
+    but missing scenario probabilities are never reconstructed.
     """
     slots = result.get("horizon_slots")
     if not isinstance(slots, dict):
@@ -238,8 +238,8 @@ def complete_horizon_slots(result: dict) -> dict | None:
                 return None
             probability = selected
         else:
-            # Historical compatibility only. New Console production no longer emits
-            # a standalone confidence probability.
+            if not allow_legacy:
+                return None
             probability = _num(slot.get("probability"))
             if probability is None or not 0 <= probability <= 100:
                 return None
@@ -358,7 +358,11 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
     result = run.get("result")
     if not isinstance(result, dict):
         return None
-    slots = complete_horizon_slots(result)
+    timestamp = datetime.fromisoformat(str(run.get("generated_at") or "").replace("Z", "+00:00"))
+    if timestamp.tzinfo is None:
+        return None
+    legacy_probability_contract = timestamp.astimezone(IST).date() < CANONICAL_TIMING_ACTIVATION_TARGET_DATE
+    slots = complete_horizon_slots(result, allow_legacy=legacy_probability_contract)
     if slots is None:
         return None
     if result.get("model_version") != "5DR_V2_1" or result.get("output_contract_version") != "5DR_V2_1_2":
@@ -371,9 +375,6 @@ def import_console_run(conn, run: dict, request: dict) -> str | None:
     if result.get("assessment_snapshot_complete") is not True or result.get("recommendation_ledger_complete") is not True:
         return None
     if not isinstance(snapshot, dict) or not isinstance(snapshot.get("metrics"), dict):
-        return None
-    timestamp = datetime.fromisoformat(str(run.get("generated_at") or "").replace("Z", "+00:00"))
-    if timestamp.tzinfo is None:
         return None
 
     metadata = request.get("metadata") if isinstance(request, dict) else None
@@ -688,6 +689,15 @@ def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> 
                         AND COUNT(*) FILTER (
                           WHERE df.bias IS NULL OR df.probability IS NULL
                              OR df.zone_low IS NULL OR df.zone_high IS NULL
+                             OR (
+                               fg.target_trading_date >= DATE '2026-09-22'
+                               AND (
+                                 df.bull_probability IS NULL
+                                 OR df.range_probability IS NULL
+                                 OR df.bear_probability IS NULL
+                                 OR abs((df.bull_probability + df.range_probability + df.bear_probability) - 100) > 0.02
+                               )
+                             )
                         )=0
                    )
                 """,
@@ -750,7 +760,12 @@ def sync_console_runs(conn, runs: list[dict], request_fetcher, now_ist: datetime
     imported = existing = incomplete = complete = 0
     for run in sorted(runs, key=lambda row: str(row.get("generated_at") or "")):
         result = run.get("result")
-        if not isinstance(result, dict) or complete_horizon_slots(result) is None:
+        try:
+            generated = datetime.fromisoformat(str(run.get("generated_at") or "").replace("Z", "+00:00"))
+        except ValueError:
+            generated = None
+        allow_legacy = bool(generated and generated.tzinfo and generated.astimezone(IST).date() < CANONICAL_TIMING_ACTIVATION_TARGET_DATE)
+        if not isinstance(result, dict) or complete_horizon_slots(result, allow_legacy=allow_legacy) is None:
             incomplete += 1
             continue
         complete += 1
