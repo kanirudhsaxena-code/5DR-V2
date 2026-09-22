@@ -11,7 +11,16 @@ from experiments.data_contract import DataArchitectureError
 ENGINE = {
     "model_version": "5DR_V2_1",
     "output_contract_version": "5DR_V2_1_2",
-    "horizon_slots": {f"D+{i}": {} for i in range(1, 6)},
+    "horizon_slots": {
+        f"D+{i}": {
+            "direction": "RANGE",
+            "probabilities": {"BULL": 25.0, "RANGE": 50.0, "BEAR": 25.0},
+            "zone_low": 23000 + i * 10,
+            "zone_high": 23500 + i * 10,
+            "basis": f"governed test horizon {i}",
+        }
+        for i in range(1, 6)
+    },
     "des5": 31.0,
     "directional_label": "BULL",
     "market_trust": 70.0,
@@ -37,7 +46,13 @@ def _release_provider(context):
         "recommendation_assessment": "Recommendation assessment present.",
         "assessment_snapshot_complete": True,
         "horizon_slots": {
-            f"D+{i}": {"status": "READY", "zone_low": 23000 + i * 10, "zone_high": 23100 + i * 10}
+            f"D+{i}": {
+                "direction": "RANGE",
+                "probabilities": {"BULL": 25.0, "RANGE": 50.0, "BEAR": 25.0},
+                "zone_low": 23000 + i * 10,
+                "zone_high": 23500 + i * 10,
+                "basis": f"governed release horizon {i}",
+            }
             for i in range(1, 6)
         },
         "recommendation_ledger_complete": True,
