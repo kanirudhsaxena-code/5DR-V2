@@ -18,7 +18,16 @@ def _valid_result():
     return {
         "model_version": "5DR_V2_1",
         "output_contract_version": "5DR_V2_1_2",
-        "horizon_slots": {f"D+{i}": {} for i in range(1, 6)},
+        "horizon_slots": {
+            f"D+{i}": {
+                "direction": "RANGE",
+                "probabilities": {"BULL": 25.0, "RANGE": 50.0, "BEAR": 25.0},
+                "zone_low": 23000 + i * 10,
+                "zone_high": 23500 + i * 10,
+                "basis": f"governed test horizon {i}",
+            }
+            for i in range(1, 6)
+        },
     }
 
 
@@ -52,14 +61,14 @@ def test_execute_does_not_require_post_forecast_lifecycle_fields():
 def test_execute_rejects_missing_horizon():
     result = _valid_result()
     del result["horizon_slots"]["D+5"]
-    with pytest.raises(ValueError, match="missing horizon slots"):
+    with pytest.raises(ValueError, match="horizon_slots must contain exactly"):
         execute(_request(), lambda request: result)
 
 
 def test_execute_rejects_non_object_horizons():
     result = _valid_result()
     result["horizon_slots"] = []
-    with pytest.raises(ValueError, match="horizon_slots must be an object"):
+    with pytest.raises(ValueError, match="horizon_slots must contain exactly"):
         execute(_request(), lambda request: result)
 
 
