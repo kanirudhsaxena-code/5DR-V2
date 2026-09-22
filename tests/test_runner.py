@@ -31,11 +31,13 @@ def _payload():
         "data_adequate": True,
         "event_kill_switch": False,
         "expected_rr": 2.5,
-        "forecast_assessment": "Forecast assessment present",
-        "recommendation_assessment": "Recommendation assessment present",
-        "horizon_slots": {f"D+{i}": {} for i in range(1, 6)},
-        "recommendation_ledger_complete": True,
-        "assessment_snapshot_complete": True,
+        "horizon_slots": {
+            "D+1": {"direction":"BULLISH","probabilities":{"BULL":55,"RANGE":35,"BEAR":10},"zone_low":23000,"zone_high":23300,"basis":"Price structure"},
+            "D+2": {"direction":"BULLISH","probabilities":{"BULL":52,"RANGE":36,"BEAR":12},"zone_low":23050,"zone_high":23400,"basis":"Price and PVPO"},
+            "D+3": {"direction":"RANGE","probabilities":{"BULL":28,"RANGE":50,"BEAR":22},"zone_low":23000,"zone_high":23450,"basis":"Mixed confirmation"},
+            "D+4": {"direction":"RANGE","probabilities":{"BULL":27,"RANGE":49,"BEAR":24},"zone_low":22950,"zone_high":23500,"basis":"Mixed confirmation"},
+            "D+5": {"direction":"RANGE","probabilities":{"BULL":26,"RANGE":48,"BEAR":26},"zone_low":22900,"zone_high":23550,"basis":"Wider uncertainty"},
+        },
     }
     return {
         "request_id": "5drreq_test",
@@ -50,6 +52,21 @@ def _payload():
                 "normalized": normalized,
             }
         ],
+        "assessment_context": {
+            "source_id": "5DR-ASSESSMENT-TEST",
+            "assessed_at": "2026-09-12T09:30:00Z",
+            "headline": "Assessment complete",
+            "snapshot_complete": True,
+            "recommendation_ledger_complete": True,
+            "metrics": {
+                "day_metrics": {label: {"status":"NOT DUE"} for label in ("D","D+1","D+2","D+3","D+4")},
+                "recommendation_ledger": [],
+                "all_recommendations_count": 0,
+                "recommendation_ledger_complete": True,
+                "assessment_snapshot_complete": True,
+            },
+        },
+        "predecessor": None,
     }
 
 
@@ -70,6 +87,11 @@ def test_runner_emits_console_release_envelope():
     assert envelope["provenance"]["mode"] == "HYBRID"
     assert envelope["provenance"]["freshness_at"] == "2026-09-12T09:00:00Z"
     assert envelope["result"]["output_contract_version"] == "5DR_V2_1_2"
+    assert envelope["result"]["assessment_snapshot_complete"] is True
+    assert envelope["result"]["recommendation_ledger_complete"] is True
+    assert "DES5" in envelope["result"]["forecast_assessment"]
+    assert "Single Tradeability Gate" in envelope["result"]["recommendation_assessment"]
+    assert envelope["result"]["horizon_slots"]["D+1"]["probabilities"]["BULL"] == 55
 
 
 def test_runner_cli_fails_closed_on_missing_evidence(tmp_path, capsys):
@@ -81,3 +103,25 @@ def test_runner_cli_fails_closed_on_missing_evidence(tmp_path, capsys):
     captured = capsys.readouterr()
     assert code == 2
     assert "evidence is mandatory" in captured.err
+
+
+def test_published_runner_blocks_missing_assessment_context():
+    payload = _payload()
+    payload.pop("assessment_context")
+    try:
+        build_run_envelope(payload, published=True)
+    except ValueError as exc:
+        assert "assessment-first context is mandatory" in str(exc)
+    else:
+        raise AssertionError("published run should fail closed without assessment context")
+
+
+def test_runner_rejects_invalid_daily_probability_vector():
+    payload = _payload()
+    payload["evidence"][0]["normalized"]["horizon_slots"]["D+1"]["probabilities"] = {"BULL": 60, "RANGE": 35, "BEAR": 15}
+    try:
+        build_run_envelope(payload, published=True)
+    except ValueError as exc:
+        assert "probabilities must total 100" in str(exc)
+    else:
+        raise AssertionError("invalid horizon probability vector should fail closed")
