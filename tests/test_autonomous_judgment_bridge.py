@@ -43,7 +43,9 @@ def _normalized():
             "closing_confirmation": 60.0,
             "evidence_freshness_completeness": 95.0,
         },
-        "event_shock": "NORMAL",
+        "event_shock": "LOW",
+        "event_transmission": "TWO_SIDED",
+        "convexity_warranted": False,
         "execution_inputs": {
             "rr_score": 70.0,
             "premium_iv_theta_score": 70.0,
@@ -54,7 +56,16 @@ def _normalized():
         "data_adequate": True,
         "event_kill_switch": False,
         "expected_rr": 2.0,
-        "horizon_slots": {f"D+{i}": {"status": "PENDING_RELEASE"} for i in range(1, 6)},
+        "horizon_slots": {
+            f"D+{i}": {
+                "direction": "RANGE",
+                "probabilities": {"BULL": 25.0, "RANGE": 50.0, "BEAR": 25.0},
+                "zone_low": 23000 + i * 10,
+                "zone_high": 23500 + i * 10,
+                "basis": f"governed test horizon {i}",
+            }
+            for i in range(1, 6)
+        },
     }
 
 
