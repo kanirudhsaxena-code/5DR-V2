@@ -49,11 +49,53 @@ jobs:
           print('IMPORTER_PARAMETER_COUNT_AND_TIMESTAMP_REPAIRED_FOR_EXCEPTION_RUN')
           PY
 
-      - name: Import exact governed Console handoff
+      - name: Import only the exact governed rescue run
         run: |
           set -euo pipefail
           python -m pip install --quiet psycopg2-binary
-          python -m src.console_forecast_sync_cli | tee exception-nifty-sync-20260923.json
+          python - <<'PY' | tee exception-nifty-sync-20260923.json
+          import json, os
+          import psycopg2
+          from src.console_forecast_sync_cli import _get_json, _validate_handoff
+          from src.console_forecast_sync import import_console_run
+
+          payload=_get_json(os.environ['EDGE_CONSOLE_HANDOFF_URL'])
+          runs,requests=_validate_handoff(payload)
+          expected=os.environ['EXPECTED_CONSOLE_RUN_ID']
+          matches=[r for r in runs if str(r.get('run_id') or '')==expected]
+          if len(matches)!=1:
+              raise SystemExit(f'EXPECTED_RESCUE_RUN_COUNT_{len(matches)}')
+          run=matches[0]
+          request=requests.get(expected) or {}
+          conn=psycopg2.connect(os.environ['DATABASE_URL'])
+          try:
+              forecast_id=import_console_run(conn,run,request)
+              if not forecast_id:
+                  raise SystemExit('EXACT_NIFTY_RESCUE_IMPORT_RETURNED_NONE')
+              with conn.cursor() as cur:
+                  cur.execute('''
+                    SELECT f.forecast_id,f.output_contract_version,g.target_trading_date,g.run_class,g.validity_status
+                      FROM runs r
+                      JOIN forecasts f ON f.run_id=r.run_id
+                      JOIN forecast_governance g ON g.forecast_id=f.forecast_id
+                     WHERE r.notes=%s
+                     LIMIT 1
+                  ''',(f'EDGE_CONSOLE_RUN_ID={expected}',))
+                  verified=cur.fetchone()
+              if not verified or verified[0]!=forecast_id or verified[1]!='5DR_V2_1_2' or str(verified[2])!='2026-09-23' or verified[4]!='VALID':
+                  raise SystemExit(f'EXACT_NIFTY_RESCUE_IMPORT_VERIFY_FAILED {verified}')
+              print(json.dumps({
+                  'status':'EXACT_NIFTY_RESCUE_IMPORTED',
+                  'console_run_id':expected,
+                  'forecast_id':forecast_id,
+                  'output_contract_version':verified[1],
+                  'target_trading_date':str(verified[2]),
+                  'truthful_run_class':verified[3],
+                  'validity_status':verified[4],
+              },sort_keys=True))
+          finally:
+              conn.close()
+          PY
 
       - name: Replace today's missed canonical with explicit audited exception
         run: |
