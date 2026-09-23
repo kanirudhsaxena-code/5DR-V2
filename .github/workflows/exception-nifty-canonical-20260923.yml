@@ -25,20 +25,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Apply narrowly scoped importer repair for V2.1.2 row
+      - name: Apply narrowly scoped importer repairs for V2.1.2 row
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           path=Path('src/console_forecast_sync.py')
           text=path.read_text()
-          old="""              %s,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
-          new="""              %s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
-          if old not in text:
+
+          old_values="""              %s,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          new_values="""              %s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          if old_values not in text:
               raise SystemExit('EXPECTED_IMPORTER_PARAMETER_DEFECT_NOT_FOUND')
-          repaired=text.replace(old,new,1)
-          path.write_text(repaired)
-          print('IMPORTER_PARAMETER_COUNT_REPAIRED_FOR_EXCEPTION_RUN')
+          text=text.replace(old_values,new_values,1)
+
+          old_time='''        assessed_at = datetime.fromisoformat(assessed_at_raw.replace("Z","+00:00"))'''
+          new_time='''        try:\n            assessed_at = datetime.fromisoformat(assessed_at_raw.replace("Z","+00:00"))\n        except ValueError:\n            assessed_at = datetime.strptime(assessed_at_raw.split(" (",1)[0], "%a %b %d %Y %H:%M:%S GMT%z")'''
+          if old_time not in text:
+              raise SystemExit('EXPECTED_ASSESSMENT_TIMESTAMP_PARSER_NOT_FOUND')
+          text=text.replace(old_time,new_time,1)
+
+          path.write_text(text)
+          print('IMPORTER_PARAMETER_COUNT_AND_TIMESTAMP_REPAIRED_FOR_EXCEPTION_RUN')
           PY
 
       - name: Import exact governed Console handoff
