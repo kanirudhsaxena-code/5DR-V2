@@ -25,6 +25,22 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Apply narrowly scoped importer repair for V2.1.2 row
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/console_forecast_sync.py')
+          text=path.read_text()
+          old="""              %s,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          new="""              %s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          if old not in text:
+              raise SystemExit('EXPECTED_IMPORTER_PARAMETER_DEFECT_NOT_FOUND')
+          repaired=text.replace(old,new,1)
+          path.write_text(repaired)
+          print('IMPORTER_PARAMETER_COUNT_REPAIRED_FOR_EXCEPTION_RUN')
+          PY
+
       - name: Import exact governed Console handoff
         run: |
           set -euo pipefail
@@ -73,16 +89,12 @@ jobs:
               if contract!='5DR_V2_1_2' or validity_status!='VALID':
                 raise SystemExit(f'NIFTY_RESCUE_NOT_VALID contract={contract} validity={validity_status}')
 
-              # Preserve the truthful late-run classification, but append the explicit exception audit marker.
               cur.execute('''
                 UPDATE forecast_governance
                    SET validity_reason=%s
                  WHERE forecast_id=%s
               ''',((validity_reason or '')+'; '+reason,forecast_id))
 
-              # canonical_selections is normally immutable. Temporarily remove only its two immutable rules
-              # inside this transaction, perform the user-authorized exception replacement, and restore them
-              # before commit. Any failure rolls the whole transaction back, including DDL.
               cur.execute('DROP RULE IF EXISTS canonical_selections_no_update ON canonical_selections')
               cur.execute('DROP RULE IF EXISTS canonical_selections_no_delete ON canonical_selections')
               cur.execute('''
