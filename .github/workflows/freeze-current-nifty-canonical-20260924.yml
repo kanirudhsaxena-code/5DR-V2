@@ -1,0 +1,139 @@
+name: Freeze Current 24 Sep NIFTY Canonical
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/freeze-current-nifty-canonical-20260924.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EDGE_CONSOLE_HANDOFF_URL: https://raw.githubusercontent.com/kanirudhsaxena-code/EDGE-CONSOLE/state/5dr-handoff/runtime/5dr-canonical-handoff.json
+      EXPECTED_CONSOLE_RUN_ID: 5drrun_dc35bff9-13ab-4c49-b45c-41bac1891b05
+      TARGET_TRADING_DATE: '2026-09-24'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply narrowly scoped importer repairs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/console_forecast_sync.py')
+          text=path.read_text()
+          old_values="""              %s,%s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          new_values="""              %s,%s,%s,now(),%s,%s,%s,'5DR_V2_1_2'"""
+          if old_values in text: text=text.replace(old_values,new_values,1)
+          elif new_values not in text: raise SystemExit('EXPECTED_IMPORTER_PARAMETER_SHAPE_NOT_FOUND')
+          old_time='''        assessed_at = datetime.fromisoformat(assessed_at_raw.replace("Z","+00:00"))'''
+          new_time='''        try:\n            assessed_at = datetime.fromisoformat(assessed_at_raw.replace("Z","+00:00"))\n        except ValueError:\n            assessed_at = datetime.strptime(assessed_at_raw.split(" (",1)[0], "%a %b %d %Y %H:%M:%S GMT%z")'''
+          if old_time in text: text=text.replace(old_time,new_time,1)
+          elif new_time not in text: raise SystemExit('EXPECTED_ASSESSMENT_TIMESTAMP_PARSER_SHAPE_NOT_FOUND')
+          path.write_text(text)
+          PY
+      - name: Import exact current governed NIFTY run
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet psycopg2-binary
+          python - <<'PY'
+          import json, os, psycopg2
+          from src.console_forecast_sync_cli import _get_json, _validate_handoff
+          from src.console_forecast_sync import import_console_run
+          payload=_get_json(os.environ['EDGE_CONSOLE_HANDOFF_URL'])
+          runs,requests=_validate_handoff(payload)
+          expected=os.environ['EXPECTED_CONSOLE_RUN_ID']; target=os.environ['TARGET_TRADING_DATE']
+          matches=[r for r in runs if str(r.get('run_id') or '')==expected]
+          if len(matches)!=1: raise SystemExit(f'EXPECTED_CURRENT_RUN_COUNT_{len(matches)}')
+          conn=psycopg2.connect(os.environ['DATABASE_URL'])
+          try:
+            forecast_id=import_console_run(conn,matches[0],requests.get(expected) or {})
+            if not forecast_id: raise SystemExit('CURRENT_NIFTY_IMPORT_RETURNED_NONE')
+            with conn.cursor() as cur:
+              cur.execute('''SELECT f.forecast_id,f.output_contract_version,g.target_trading_date,g.run_class,g.validity_status
+                               FROM runs r JOIN forecasts f ON f.run_id=r.run_id
+                               JOIN forecast_governance g ON g.forecast_id=f.forecast_id
+                              WHERE r.notes=%s LIMIT 1''',(f'EDGE_CONSOLE_RUN_ID={expected}',))
+              v=cur.fetchone()
+            if not v or v[0]!=forecast_id or v[1]!='5DR_V2_1_2' or str(v[2])!=target or v[4]!='VALID':
+              raise SystemExit(f'CURRENT_NIFTY_IMPORT_VERIFY_FAILED {v}')
+            print(json.dumps({'status':'CURRENT_NIFTY_IMPORTED','console_run_id':expected,'forecast_id':forecast_id,
+                              'target_trading_date':str(v[2]),'run_class':v[3],'validity_status':v[4]},sort_keys=True))
+          finally: conn.close()
+          PY
+      - name: Replace all prior 24 Sep NIFTY canonical selection with current run
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, psycopg2
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          console_run_id=os.environ['EXPECTED_CONSOLE_RUN_ID']; target=os.environ['TARGET_TRADING_DATE']
+          marker=f'EDGE_CONSOLE_RUN_ID={console_run_id}'
+          now=datetime.now(ZoneInfo('Asia/Kolkata'))
+          reason=(f'USER_AUTHORIZED_CURRENT_STATE_FREEZE: governed NIFTY run {console_run_id}, requested at approximately '
+                  '10:42 IST on 2026-09-24, replaces the earlier 24-Sep canonical. Actual run timestamp and provenance '
+                  'are preserved; the earlier 24-Sep run remains audit history only and is no longer selected for canonical efficacy.')
+          conn=psycopg2.connect(os.environ['DATABASE_URL']); conn.autocommit=False
+          try:
+            with conn.cursor() as cur:
+              cur.execute('''SELECT f.forecast_id,f.run_timestamp,f.output_contract_version,g.target_trading_date,g.run_class,g.validity_status,g.validity_reason
+                               FROM runs r JOIN forecasts f ON f.run_id=r.run_id
+                               JOIN forecast_governance g ON g.forecast_id=f.forecast_id
+                              WHERE r.notes=%s LIMIT 1''',(marker,))
+              row=cur.fetchone()
+              if not row: raise SystemExit('CURRENT_NIFTY_IMPORT_NOT_FOUND')
+              forecast_id,run_ts,contract,target_date,run_class,validity_status,validity_reason=row
+              if str(target_date)!=target or contract!='5DR_V2_1_2' or validity_status!='VALID':
+                raise SystemExit(f'CURRENT_NIFTY_NOT_VALID {row}')
+              cur.execute('UPDATE forecast_governance SET validity_reason=%s WHERE forecast_id=%s',((validity_reason or '')+'; '+reason,forecast_id))
+              cur.execute('DROP RULE IF EXISTS canonical_selections_no_update ON canonical_selections')
+              cur.execute('DROP RULE IF EXISTS canonical_selections_no_delete ON canonical_selections')
+              cur.execute('''INSERT INTO canonical_selections(
+                               target_trading_date,selection_status,selected_forecast_id,first_candidate_forecast_id,
+                               selected_at,window_open_at,window_close_at,selection_rule,selection_reason)
+                             VALUES (%s,'SELECTED',%s,%s,%s,
+                               (%s::date + time '08:40:00') AT TIME ZONE 'Asia/Kolkata',
+                               (%s::date + time '09:00:00') AT TIME ZONE 'Asia/Kolkata','EXCEPTION_CANONICAL',%s)
+                             ON CONFLICT (target_trading_date) DO UPDATE SET
+                               selection_status='SELECTED',selected_forecast_id=EXCLUDED.selected_forecast_id,
+                               first_candidate_forecast_id=EXCLUDED.first_candidate_forecast_id,selected_at=EXCLUDED.selected_at,
+                               selection_rule='EXCEPTION_CANONICAL',selection_reason=EXCLUDED.selection_reason''',
+                          (target,forecast_id,forecast_id,now,target,target,reason))
+              cur.execute('CREATE RULE canonical_selections_no_update AS ON UPDATE TO canonical_selections DO INSTEAD NOTHING')
+              cur.execute('CREATE RULE canonical_selections_no_delete AS ON DELETE TO canonical_selections DO INSTEAD NOTHING')
+              cur.execute('''SELECT c.selection_status,c.selected_forecast_id,c.selection_rule,f.run_timestamp,
+                                    f.output_contract_version,g.run_class,g.validity_status,r.notes
+                               FROM canonical_selections c JOIN forecasts f ON f.forecast_id=c.selected_forecast_id
+                               JOIN forecast_governance g ON g.forecast_id=f.forecast_id JOIN runs r ON r.run_id=f.run_id
+                              WHERE c.target_trading_date=%s''',(target,))
+              v=cur.fetchone()
+              if not v or v[0]!='SELECTED' or v[1]!=forecast_id or v[2]!='EXCEPTION_CANONICAL' or v[4]!='5DR_V2_1_2' or v[6]!='VALID' or v[7]!=marker:
+                raise SystemExit(f'CURRENT_NIFTY_CANONICAL_VERIFY_FAILED {v}')
+              out={'status':'NIFTY_CURRENT_CANONICAL_FROZEN','target_trading_date':target,'console_run_id':console_run_id,
+                   'forecast_id':forecast_id,'run_timestamp':v[3].isoformat(),'truthful_run_class':v[5],
+                   'selection_status':v[0],'selection_rule':v[2],'prior_24sep_selection_superseded':True,
+                   'selected_at':now.isoformat()}
+              print('NIFTY_CURRENT_CANONICAL_FROZEN '+json.dumps(out,sort_keys=True))
+              open('nifty-current-canonical-confirmation.json','w').write(json.dumps(out,indent=2,sort_keys=True))
+            conn.commit()
+          except Exception:
+            conn.rollback(); raise
+          finally: conn.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nifty-current-canonical-confirmation-20260924
+          path: nifty-current-canonical-confirmation.json
+          if-no-files-found: ignore
+          retention-days: 30
