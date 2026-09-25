@@ -64,13 +64,13 @@ jobs:
           req=requests.get(expected) or {}
           if str(req.get('request_id') or '') != expected_request:
               raise SystemExit(f'RECOVERED_REQUEST_BINDING_MISMATCH {req.get("request_id")}')
-          meta=req.get('metadata') or {}
-          if str(meta.get('type') or '') != 'PREOPEN_CANONICAL_ATTEMPT':
-              raise SystemExit(f'RECOVERED_REQUEST_NOT_CANONICAL_INTENT {meta}')
-          if str(meta.get('slot') or '') != 'USER_CANONICAL_0903':
-              raise SystemExit(f'RECOVERED_CANONICAL_SLOT_MISMATCH {meta.get("slot")}')
-          if not str(meta.get('requested_at') or '').startswith(target):
-              raise SystemExit(f'RECOVERED_REQUEST_DATE_MISMATCH {meta.get("requested_at")}')
+          canonical=((req.get('metadata') or {}).get('canonical_attempt') or {})
+          if str(canonical.get('type') or '') != 'PREOPEN_CANONICAL_ATTEMPT':
+              raise SystemExit(f'RECOVERED_REQUEST_NOT_CANONICAL_INTENT {canonical}')
+          if str(canonical.get('slot') or '') != 'USER_CANONICAL_0903':
+              raise SystemExit(f'RECOVERED_CANONICAL_SLOT_MISMATCH {canonical.get("slot")}')
+          if not str(canonical.get('requested_at') or '').startswith(target):
+              raise SystemExit(f'RECOVERED_REQUEST_DATE_MISMATCH {canonical.get("requested_at")}')
 
           conn=psycopg2.connect(os.environ['DATABASE_URL'])
           try:
