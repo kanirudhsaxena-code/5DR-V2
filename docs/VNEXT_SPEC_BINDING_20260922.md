@@ -33,12 +33,26 @@ This repository branch is governed by the approved additive VNext specification 
 9. Historical missing issuance-time evidence is never reconstructed as official forward evidence.
 10. No branch in this workstream may place orders or enable trading execution.
 
+## G6/Core SHADOW horizon lock — authoritative clarification 26 Sep 2026
+
+For both EDGE NIFTY and EDGE Stocks, the only valid G6/Core SHADOW horizon sequence is exactly `D,D+1,D+2,D+3,D+4`, in that order. `D` is mandatory and `D+5` is forbidden. Any payload with a missing `D`, any `D+5`, any row count other than five, duplicates, or any different ordering must fail closed and must not enter SHADOW evidence or Learning Lab populations.
+
+Audit history: an earlier NIFTY implementation correction described `D+1,D+2,D+3,D+4,D+5`. That wording is superseded, retained only as audit/version history, and MUST NOT be implemented. This clarification does not change frozen production EDGE/5DR methodology; it binds G6/Core SHADOW only until governed promotion.
+
+## G6-A readiness contract
+
+- Information: freeze immutable issuance identity, target trading session, Expected Centre, Core/Outer bounds, width, regime/confidence/event state, evidence/source references, calibration version, verification state and lineage; bulky reconstructible market history is reference/pull-on-demand rather than duplicated per forecast.
+- Methodology: Core is a narrower precision challenger around Expected Centre; Outer remains the broader risk envelope. NIFTY and Stocks share semantics but retain engine-specific calibration. Outcome scoring uses full-session OHLC interaction plus close/touch, centre error, miss distance, normalized width/miss and direction diagnostics. Forecast-zone efficacy remains separate from execution MFE/MAE/R.
+- Output: one immutable canonical Core Zone read-model object per run, carrying report version/hash and the exact ordered five horizons. Console and ChatGPT must consume that same object rather than independently recalculating values.
+- Learning: matured outcomes append immutable evaluation/observation records with horizon, regime, confidence, actionable/NO TRADE, Core-vs-Outer, width and interaction metadata. Learning may propose improvements but cannot auto-promote them; APPROVE/REJECT/DEFER remains explicit user governance.
+- Isolation: synthetic fixtures are engineering-only. Missing issuance evidence or outcome evidence fails closed. No SHADOW record may mutate production probabilities, DES/tradeability, Market Trust, recommendation, canonical selection, official efficacy or trading behavior.
+
 ## Build sequence
 
 G3 — shared read-only/additive Learning Lab data model, observation ingestion, daily snapshots, hypotheses/challenger records and approval ledger.
 G4 — Console Learning Lab overview/drill-down and stale/failure/approval UI.
 G5 — EDGE Stocks D through D+4 forecast path.
-G6 — Core Zone SHADOW implementation after engine annexes.
+G6 — Core Zone SHADOW implementation after G6-A0:A5 readiness acceptance.
 G7 — PVPO Grid V1 read model/rendering.
 G8 — exact-run report view and Console/ChatGPT parity.
 G9 — regression and non-disruption acceptance before any promotion.
