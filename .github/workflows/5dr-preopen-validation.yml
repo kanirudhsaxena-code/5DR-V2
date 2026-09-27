@@ -3,8 +3,9 @@ name: 5DR PREOPEN Validation Gate
 on:
   workflow_dispatch:
   schedule:
-    # 08:50 IST weekdays. Validation only; this does not activate production PREOPEN.
-    - cron: '20 3 * * 1-5'
+    # 08:45 IST weekdays. Validation only; this does not activate production PREOPEN.
+    # Runs before the 08:50 governed canonical evidence clock.
+    - cron: '15 3 * * 1-5'
 
 permissions:
   contents: read
