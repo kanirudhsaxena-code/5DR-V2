@@ -45,14 +45,16 @@ def classify_preopen_window(now):
     if local.weekday() >= 5:
         raise DataArchitectureError("preopen target is not a weekday")
     clock = local.timetz().replace(tzinfo=None)
-    if not (time(8, 45) <= clock < time(9, 0)):
-        raise DataArchitectureError("outside PREOPEN validation window")
+    # P0-07: acquire the market-sensitive snapshot only during the genuine NSE
+    # matching/opening-price phase and before the 09:15 normal-market open.
+    if not (time(9, 10) <= clock < time(9, 15)):
+        raise DataArchitectureError("outside governed PREOPEN matching window")
     return {
-        "label": "PREOPEN",
+        "label": "PREOPEN_MATCHING",
         "target_session_date": local.date().isoformat(),
         "captured_at_ist": local.isoformat(),
-        "window_start_ist": "08:45:00",
-        "window_end_exclusive_ist": "09:00:00",
+        "window_start_ist": "09:10:00",
+        "window_end_exclusive_ist": "09:15:00",
     }
 
 
