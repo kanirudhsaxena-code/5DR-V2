@@ -52,12 +52,25 @@ def test_all_empty_responses_fail_closed_without_stale_substitution():
 def test_retry_stops_at_0915_normal_market_boundary():
     client=FakeClient([env([]),env([["2026-09-28T09:14:00+05:30",1,1,1,1,1,1]])])
     times=iter([
+        datetime(2026,9,28,9,14,30,tzinfo=IST),
         datetime(2026,9,28,9,15,tzinfo=IST),
     ])
     with pytest.raises(DataArchitectureError,match="failed closed after bounded retries"):
         latest_intraday_with_retry(
             client,"KEY",attempts=3,sleep_seconds=0,
             clock=lambda: next(times),
+            sleeper=lambda seconds: None,
+        )
+    assert client.calls==1
+
+
+def test_response_returning_at_normal_open_is_rejected_even_if_request_started_preopen():
+    row=["2026-09-28T09:14:30+05:30",100,101,99,100.5,1234,0]
+    client=FakeClient([env([row])])
+    with pytest.raises(DataArchitectureError,match="provider response crossed normal-market boundary"):
+        latest_intraday_with_retry(
+            client,"KEY",attempts=1,
+            clock=lambda: datetime(2026,9,28,9,15,tzinfo=IST),
             sleeper=lambda seconds: None,
         )
     assert client.calls==1
