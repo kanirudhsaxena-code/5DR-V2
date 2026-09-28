@@ -97,13 +97,17 @@ def test_tamper_fails_closed():
 
 def test_migration_binds_native_run_and_forecast_identity_and_is_append_only():
     sql = Path("migrations/009_p0_11_presentation_snapshots.sql").read_text(encoding="utf-8")
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS uq_5dr_forecasts_run_forecast_identity" in sql
+    assert "ON public.forecasts(run_id,forecast_id)" in sql
     assert "run_id bigint NOT NULL REFERENCES public.runs(run_id)" in sql
     assert "result_id text NOT NULL REFERENCES public.forecasts(forecast_id)" in sql
+    assert "FOREIGN KEY (run_id,result_id)" in sql
+    assert "REFERENCES public.forecasts(run_id,forecast_id)" in sql
     assert "checkpoint_id text CHECK (checkpoint_id IS NULL)" in sql
     assert "jsonb_array_length(sections)=2" in sql
     assert "ON public.presentation_snapshots(run_id,result_id)" in sql
-    assert "forecast_run <> NEW.run_id" in sql
-    assert "presentation_snapshots_validate_identity" in sql
+    assert "CREATE OR REPLACE FUNCTION" not in sql
+    assert "CREATE TRIGGER" not in sql
     assert "presentation_snapshots_no_update" in sql
     assert "presentation_snapshots_no_delete" in sql
     assert "INSERT INTO public.presentation_snapshots" not in sql
