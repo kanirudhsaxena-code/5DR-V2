@@ -18,6 +18,7 @@ from experiments.preopen_evidence import (
     build_preopen_evidence_bundle,
     verify_preopen_evidence_bundle,
 )
+from experiments.preopen_retry import latest_intraday_with_retry
 from experiments.upstox_catalog import PublicInstrumentCatalog
 from experiments.upstox_instruments import resolve_global_instruments
 from experiments.upstox_quant_client import QuantReadOnlyClient
@@ -187,11 +188,7 @@ def acquire_preopen_bundle(token, *, now=None, completed_run_keys=()):
             env = client.full_quotes([key])
             snap = _quote_snapshot(_quote_map(env)[key])
         else:
-            env = client.intraday(key, "minutes", 1)
-            latest = max(
-                env["payload"]["data"]["candles"],
-                key=lambda row: _stamp(row[0]),
-            )
+            env, latest = latest_intraday_with_retry(client, key)
             snap = {
                 "last_price": latest[4],
                 "volume": latest[5],
