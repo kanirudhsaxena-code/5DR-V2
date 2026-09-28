@@ -59,6 +59,14 @@ jobs:
                   """)
                   canonical_counts = cur.fetchall()
                   cur.execute("""
+                    select selection_rule,count(*)::int as count
+                      from canonical_selections
+                     where selection_status='SELECTED'
+                     group by selection_rule
+                     order by selection_rule
+                  """)
+                  selection_rule_counts = cur.fetchall()
+                  cur.execute("""
                     select run_class,count(*)::int as count
                       from forecast_governance
                      group by run_class
@@ -80,6 +88,7 @@ jobs:
               'present_tables':present,
               'columns':cols,
               'canonical_selection_counts':canonical_counts,
+              'selected_canonical_selection_rule_counts':selection_rule_counts,
               'forecast_governance_run_class_counts':run_class_counts,
               'selected_canonical_run_class_counts':selected_run_class_counts,
               'credential_values_emitted':False,
