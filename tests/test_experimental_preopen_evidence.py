@@ -93,12 +93,16 @@ def build(**overrides):
 
 class PreopenEvidenceTests(unittest.TestCase):
     def test_preopen_window_is_exact_and_weekday_only(self):
-        row = classify_preopen_window(datetime(2026, 9, 18, 8, 50, tzinfo=IST))
-        self.assertEqual(row["label"], "PREOPEN")
+        row = classify_preopen_window(datetime(2026, 9, 18, 9, 10, tzinfo=IST))
+        self.assertEqual(row["label"], "PREOPEN_MATCHING")
+        self.assertEqual(row["window_start_ist"], "09:10:00")
+        self.assertEqual(row["window_end_exclusive_ist"], "09:15:00")
         with self.assertRaises(DataArchitectureError):
-            classify_preopen_window(datetime(2026, 9, 18, 9, 0, tzinfo=IST))
+            classify_preopen_window(datetime(2026, 9, 18, 9, 9, 59, tzinfo=IST))
         with self.assertRaises(DataArchitectureError):
-            classify_preopen_window(datetime(2026, 9, 19, 8, 50, tzinfo=IST))
+            classify_preopen_window(datetime(2026, 9, 18, 9, 15, tzinfo=IST))
+        with self.assertRaises(DataArchitectureError):
+            classify_preopen_window(datetime(2026, 9, 19, 9, 10, tzinfo=IST))
 
     def test_complete_preopen_bundle_is_ready_and_side_effect_free(self):
         bundle = build()
