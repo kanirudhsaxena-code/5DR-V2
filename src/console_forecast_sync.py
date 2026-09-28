@@ -16,6 +16,10 @@ from zoneinfo import ZoneInfo
 IST = ZoneInfo("Asia/Kolkata")
 NY = ZoneInfo("America/New_York")
 CANONICAL_TIMING_ACTIVATION_TARGET_DATE = date(2026, 9, 22)
+# P0-11 storage was activated after the 28-Sep canonical window had passed.
+# Never backfill historical presentations; the first eligible prospective target
+# is therefore 29-Sep-2026.
+P0_11_PRESENTATION_ACTIVATION_TARGET_DATE = date(2026, 9, 29)
 PREOPEN_WINDOW_START = time(8, 40)
 PREOPEN_REQUEST_CUTOFF = time(8, 55)
 HARD_CANONICAL_COMPLETION_CUTOFF = time(9, 0)
@@ -617,12 +621,131 @@ def _candidate_type(validity_reason: str | None, evidence_mode: str) -> str:
     return "OVERNIGHT_FALLBACK_CANONICAL"
 
 
+def _persist_selected_canonical_presentation(cur, selected_id: str) -> None:
+    """Persist P0-11 presentation from exact already-persisted selected records.
+
+    This executes inside the same transaction as canonical_selections. Any missing,
+    ambiguous, non-JSON, or identity-mismatched source record raises before commit.
+    """
+    from .canonical_presentation import build_selected_canonical_presentation
+
+    cur.execute(
+        """
+        SELECT f.run_id,to_jsonb(r),to_jsonb(f)
+          FROM forecasts f
+          JOIN runs r ON r.run_id=f.run_id
+         WHERE f.forecast_id=%s
+        """,
+        (selected_id,),
+    )
+    base = cur.fetchall()
+    if len(base) != 1:
+        raise ValueError("P0_11_5DR_SELECTED_FORECAST_AMBIGUOUS")
+    run_id, run_row, forecast_row = base[0]
+
+    cur.execute(
+        """
+        SELECT to_jsonb(a)
+          FROM assessment_snapshots a
+         WHERE a.forecast_id=%s AND a.run_id=%s
+        """,
+        (selected_id, run_id),
+    )
+    assessments = cur.fetchall()
+    if len(assessments) != 1:
+        raise ValueError("P0_11_5DR_ASSESSMENT_AMBIGUOUS")
+
+    cur.execute(
+        """
+        SELECT to_jsonb(df)
+          FROM daily_forecasts df
+         WHERE df.forecast_id=%s
+         ORDER BY df.day_number
+        """,
+        (selected_id,),
+    )
+    daily_rows = [row[0] for row in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT to_jsonb(cs)
+          FROM component_scores cs
+         WHERE cs.forecast_id=%s
+         ORDER BY CASE cs.component
+           WHEN 'PRICE_STRUCTURE' THEN 1
+           WHEN 'PVPO' THEN 2
+           WHEN 'PARTICIPATION' THEN 3
+           WHEN 'MACRO_CATALYSTS' THEN 4
+           ELSE 99 END, cs.component
+        """,
+        (selected_id,),
+    )
+    component_rows = [row[0] for row in cur.fetchall()]
+
+    cur.execute(
+        "SELECT to_jsonb(ep) FROM execution_plans ep WHERE ep.forecast_id=%s",
+        (selected_id,),
+    )
+    executions = cur.fetchall()
+    if len(executions) != 1:
+        raise ValueError("P0_11_5DR_EXECUTION_PLAN_AMBIGUOUS")
+
+    snapshot = build_selected_canonical_presentation(
+        run_id=int(run_id),
+        forecast_id=selected_id,
+        run=run_row,
+        assessment_snapshot=assessments[0][0],
+        forecast=forecast_row,
+        daily_forecasts=daily_rows,
+        component_scores=component_rows,
+        execution_plan=executions[0][0],
+    )
+
+    cur.execute(
+        """
+        SELECT presentation_hash
+          FROM presentation_snapshots
+         WHERE run_id=%s AND result_id=%s
+        """,
+        (run_id, selected_id),
+    )
+    existing = cur.fetchall()
+    if len(existing) > 1:
+        raise ValueError("P0_11_5DR_PRESENTATION_IDENTITY_AMBIGUOUS")
+    if existing:
+        if str(existing[0][0]) != snapshot["presentation_hash"]:
+            raise ValueError("P0_11_5DR_PRESENTATION_IMMUTABLE_CONFLICT")
+        return
+
+    # Deliberately omit default=str: unexpected non-JSON values must fail closed
+    # before an immutable semantic/hash mismatch can be persisted.
+    sections_json = json.dumps(snapshot["sections"], ensure_ascii=False, separators=(",", ":"))
+    cur.execute(
+        """
+        INSERT INTO presentation_snapshots(
+          presentation_contract_version,engine,run_id,result_id,checkpoint_id,
+          governance_state,sections,source_payload_hash,presentation_hash
+        ) VALUES ('P0_11_PRESENTATION_V1','5DR',%s,%s,NULL,'SELECTED',%s::jsonb,%s,%s)
+        """,
+        (
+            run_id, selected_id, sections_json,
+            snapshot["source_payload_hash"], snapshot["presentation_hash"],
+        ),
+    )
+    if cur.rowcount != 1:
+        raise ValueError("P0_11_5DR_PRESENTATION_INSERT_FAILED")
+
+
 def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> int:
     """Finalize one official canonical per target trading date.
 
     Post-activation preference is PREOPEN_CANONICAL, then overnight fallback,
     otherwise CANONICAL_MISSED. Legacy targets preserve the historical latest-valid
     rule. Selection is append-only because canonical_selections is immutable.
+
+    For prospective targets beginning 29-Sep-2026, a SELECTED canonical and its
+    P0-11 immutable presentation are committed atomically. Earlier canonicals are
+    intentionally never backfilled.
     """
     now_ist = now_ist or datetime.now(IST)
     if now_ist.tzinfo is None:
@@ -734,7 +857,10 @@ def finalize_closed_canonical_windows(conn, now_ist: datetime | None = None) -> 
                         f"{canonical_type}: latest valid complete candidate selected under frozen timing governance.",
                     ),
                 )
-                finalized += max(cur.rowcount,0)
+                inserted = max(cur.rowcount,0)
+                if inserted and target >= P0_11_PRESENTATION_ACTIVATION_TARGET_DATE:
+                    _persist_selected_canonical_presentation(cur, selected_id)
+                finalized += inserted
             elif target >= CANONICAL_TIMING_ACTIVATION_TARGET_DATE:
                 window_open = datetime.combine(target, PREOPEN_WINDOW_START, tzinfo=IST)
                 window_close = datetime.combine(target, HARD_CANONICAL_COMPLETION_CUTOFF, tzinfo=IST)
