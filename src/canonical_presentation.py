@@ -21,6 +21,7 @@ def build_selected_canonical_presentation(
     *,
     run_id: int,
     forecast_id: str,
+    run: Mapping[str, Any],
     assessment_snapshot: Mapping[str, Any],
     forecast: Mapping[str, Any],
     daily_forecasts: Sequence[Mapping[str, Any]],
@@ -33,10 +34,13 @@ def build_selected_canonical_presentation(
     of the immutable presentation semantics, so daily rows must be D+1..D+5 and
     component rows are expected to be supplied in deterministic order.
     """
+    run_row = _as_mapping(run, "P0_11_5DR_RUN_MISSING")
     forecast_row = _as_mapping(forecast, "P0_11_5DR_FORECAST_MISSING")
     assessment_row = _as_mapping(assessment_snapshot, "P0_11_5DR_ASSESSMENT_MISSING")
     execution_row = _as_mapping(execution_plan, "P0_11_5DR_EXECUTION_PLAN_MISSING")
 
+    if int(run_row.get("run_id") or -1) != int(run_id):
+        raise ValueError("P0_11_5DR_RUN_RECORD_IDENTITY_MISMATCH")
     if str(forecast_row.get("forecast_id") or "") != str(forecast_id):
         raise ValueError("P0_11_5DR_FORECAST_IDENTITY_MISMATCH")
     if int(forecast_row.get("run_id") or -1) != int(run_id):
@@ -62,14 +66,16 @@ def build_selected_canonical_presentation(
     if any(str(row.get("forecast_id") or "") != str(forecast_id) for row in component_rows):
         raise ValueError("P0_11_5DR_COMPONENT_IDENTITY_MISMATCH")
 
+    current_run = {
+        "run": run_row,
+        "forecast": forecast_row,
+        "daily_forecasts": daily_rows,
+        "component_scores": component_rows,
+        "execution_plan": execution_row,
+    }
     source_payload = {
         "assessment_snapshot": assessment_row,
-        "current_run": {
-            "forecast": forecast_row,
-            "daily_forecasts": daily_rows,
-            "component_scores": component_rows,
-            "execution_plan": execution_row,
-        },
+        "current_run": current_run,
     }
     source_payload_hash = semantic_presentation_hash(source_payload)
     sections = [
@@ -79,10 +85,7 @@ def build_selected_canonical_presentation(
         },
         {
             "name": "TABLE_2_CURRENT_5DR_RUN",
-            "forecast": forecast_row,
-            "daily_forecasts": daily_rows,
-            "component_scores": component_rows,
-            "execution_plan": execution_row,
+            **current_run,
         },
     ]
     return build_presentation_snapshot(
