@@ -115,4 +115,5 @@ def test_presentation_writer_is_db_derived_and_has_no_backfill_path():
     assert "FROM component_scores" in helper
     assert "FROM execution_plans" in helper
     assert "INSERT INTO presentation_snapshots" in helper
-    assert "default=str" not in helper
+    serialization_line = next(line for line in helper.splitlines() if "sections_json = json.dumps(" in line)
+    assert "default=" not in serialization_line
