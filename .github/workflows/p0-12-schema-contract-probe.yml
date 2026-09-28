@@ -58,12 +58,30 @@ jobs:
                      order by selection_status
                   """)
                   canonical_counts = cur.fetchall()
+                  cur.execute("""
+                    select run_class,count(*)::int as count
+                      from forecast_governance
+                     group by run_class
+                     order by run_class
+                  """)
+                  run_class_counts = cur.fetchall()
+                  cur.execute("""
+                    select fg.run_class,count(*)::int as count
+                      from canonical_selections cs
+                      join forecast_governance fg on fg.forecast_id=cs.selected_forecast_id
+                     where cs.selection_status='SELECTED'
+                     group by fg.run_class
+                     order by fg.run_class
+                  """)
+                  selected_run_class_counts = cur.fetchall()
           print(json.dumps({
               'probe':'P0_12_5DR_SCHEMA_CONTRACT',
               'requested_tables':tables,
               'present_tables':present,
               'columns':cols,
               'canonical_selection_counts':canonical_counts,
+              'forecast_governance_run_class_counts':run_class_counts,
+              'selected_canonical_run_class_counts':selected_run_class_counts,
               'credential_values_emitted':False,
               'row_payloads_emitted':False,
           }, default=str, sort_keys=True))
