@@ -23,13 +23,13 @@ def env(candles):
     return {"payload":{"data":{"candles":candles}},"sha256":"abc","source_path":"fake"}
 
 
-def test_empty_first_response_retries_then_accepts_valid_candle():
-    row=["2026-09-28T08:47:00+05:30",100,101,99,100.5,1234,0]
+def test_empty_first_response_retries_then_accepts_valid_preopen_candle():
+    row=["2026-09-28T09:10:30+05:30",100,101,99,100.5,1234,0]
     client=FakeClient([env([]),env([row])])
     sleeps=[]
     result_env,latest=latest_intraday_with_retry(
         client,"KEY",attempts=3,sleep_seconds=0,
-        clock=lambda: datetime(2026,9,28,8,47,tzinfo=IST),
+        clock=lambda: datetime(2026,9,28,9,10,30,tzinfo=IST),
         sleeper=lambda seconds: sleeps.append(seconds),
     )
     assert latest==row
@@ -43,16 +43,16 @@ def test_all_empty_responses_fail_closed_without_stale_substitution():
     with pytest.raises(DataArchitectureError,match="failed closed after bounded retries"):
         latest_intraday_with_retry(
             client,"KEY",attempts=3,sleep_seconds=0,
-            clock=lambda: datetime(2026,9,28,8,50,tzinfo=IST),
+            clock=lambda: datetime(2026,9,28,9,11,tzinfo=IST),
             sleeper=lambda seconds: None,
         )
     assert client.calls==3
 
 
-def test_retry_stops_at_0900_boundary():
-    client=FakeClient([env([]),env([["2026-09-28T08:59:00+05:30",1,1,1,1,1,1]])])
+def test_retry_stops_at_0915_normal_market_boundary():
+    client=FakeClient([env([]),env([["2026-09-28T09:14:00+05:30",1,1,1,1,1,1]])])
     times=iter([
-        datetime(2026,9,28,9,0,tzinfo=IST),
+        datetime(2026,9,28,9,15,tzinfo=IST),
     ])
     with pytest.raises(DataArchitectureError,match="failed closed after bounded retries"):
         latest_intraday_with_retry(
@@ -64,10 +64,10 @@ def test_retry_stops_at_0900_boundary():
 
 
 def test_malformed_candle_rows_are_not_accepted():
-    client=FakeClient([env([["2026-09-28T08:47:00+05:30",1,2]])])
+    client=FakeClient([env([["2026-09-28T09:11:00+05:30",1,2]])])
     with pytest.raises(DataArchitectureError,match="malformed intraday candle row"):
         latest_intraday_with_retry(
             client,"KEY",attempts=1,
-            clock=lambda: datetime(2026,9,28,8,50,tzinfo=IST),
+            clock=lambda: datetime(2026,9,28,9,11,tzinfo=IST),
             sleeper=lambda seconds: None,
         )
