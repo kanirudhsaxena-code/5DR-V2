@@ -22,9 +22,10 @@ def latest_intraday_with_retry(
 ):
     """Return a non-empty validated 1-minute intraday candle response.
 
-    Empty/malformed provider candle arrays are treated as transient only for a
-    small bounded retry window. No stale candle or synthetic value is ever
-    substituted. A retry is never started at/after 09:00 IST.
+    P0-07: retries are meaningful only during the genuine NSE pre-open window.
+    Empty/malformed provider candle arrays are treated as transient for a small
+    bounded retry window. No stale candle or synthetic value is ever substituted.
+    A retry is never started at/after the 09:15 IST normal-market boundary.
     """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
@@ -38,7 +39,7 @@ def latest_intraday_with_retry(
             if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
                 raise DataArchitectureError("preopen retry clock must be timezone-aware")
             local_clock = now.astimezone(IST).timetz().replace(tzinfo=None)
-            if local_clock >= time(9, 0):
+            if local_clock >= time(9, 15):
                 break
 
         env = client.intraday(instrument_key, "minutes", 1)
@@ -61,7 +62,7 @@ def latest_intraday_with_retry(
             if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
                 raise DataArchitectureError("preopen retry clock must be timezone-aware")
             local_clock = now.astimezone(IST).timetz().replace(tzinfo=None)
-            if local_clock >= time(9, 0):
+            if local_clock >= time(9, 15):
                 break
             sleeper(sleep_seconds)
 
