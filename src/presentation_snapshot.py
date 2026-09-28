@@ -17,9 +17,12 @@ from typing import Any, Mapping, Sequence
 PRESENTATION_CONTRACT_VERSION = "P0_11_PRESENTATION_V1"
 ENGINE = "5DR"
 MAX_SAFE_INTEGER = 2**53 - 1
+
+# 5DR V2.1.2 is the current output authority. Older OUTCOME/DRILL-DOWN labels
+# remain historical only and must not be accepted for a new P0-11 snapshot.
 REQUIRED_SECTIONS = (
-    "TABLE_1_5DR_OUTCOME",
-    "TABLE_2_5DR_DRILL_DOWN",
+    "TABLE_1_5DR_ASSESSMENT_EFFICACY",
+    "TABLE_2_CURRENT_5DR_RUN",
 )
 
 
@@ -73,7 +76,7 @@ def _validate_sections(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, 
 
 def build_presentation_snapshot(
     *,
-    run_id: str,
+    run_id: str | int,
     result_id: str,
     governance_state: str,
     sections: Sequence[Mapping[str, Any]],
@@ -84,6 +87,8 @@ def build_presentation_snapshot(
         raise ValueError("PRESENTATION_MISSING_RUN_ID")
     if not str(result_id).strip():
         raise ValueError("PRESENTATION_MISSING_RESULT_ID")
+    if checkpoint_id is not None:
+        raise ValueError("PRESENTATION_5DR_CHECKPOINT_MUST_BE_NULL")
     if not str(governance_state).strip():
         raise ValueError("PRESENTATION_MISSING_GOVERNANCE_STATE")
     if not str(source_payload_hash).strip():
@@ -95,7 +100,7 @@ def build_presentation_snapshot(
         "identity": {
             "run_id": str(run_id),
             "result_id": str(result_id),
-            "checkpoint_id": None if checkpoint_id is None else str(checkpoint_id),
+            "checkpoint_id": None,
         },
         "governance_state": str(governance_state),
         "sections": normalized_sections,
@@ -112,6 +117,9 @@ def assert_presentation_snapshot(snapshot: Mapping[str, Any]) -> None:
     presentation_hash = snapshot.get("presentation_hash")
     if not isinstance(presentation_hash, str):
         raise ValueError("PRESENTATION_HASH_MISSING")
+    identity = snapshot.get("identity")
+    if not isinstance(identity, Mapping) or identity.get("checkpoint_id") is not None:
+        raise ValueError("PRESENTATION_5DR_CHECKPOINT_MUST_BE_NULL")
     basis = {key: value for key, value in snapshot.items() if key != "presentation_hash"}
     if semantic_presentation_hash(basis) != presentation_hash:
         raise ValueError("PRESENTATION_HASH_MISMATCH")
