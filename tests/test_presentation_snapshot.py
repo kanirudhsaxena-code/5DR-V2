@@ -13,54 +13,81 @@ def test_cross_language_semantic_hash_vector_matches_console():
     basis = {
         "presentation_contract_version": "P0_11_PRESENTATION_V1",
         "engine": "5DR",
-        "identity": {"run_id": "run-42", "result_id": "forecast-7", "checkpoint_id": None},
+        "identity": {"run_id": "42", "result_id": "forecast-7", "checkpoint_id": None},
         "governance_state": "SELECTED",
         "sections": [
-            {"name": "TABLE_1_5DR_OUTCOME", "value": 1.0, "probability": 42.5, "verified": True},
-            {"name": "TABLE_2_5DR_DRILL_DOWN", "items": ["PVPO", None, -0.0]},
+            {"name": "TABLE_1_5DR_ASSESSMENT_EFFICACY", "value": 1.0, "probability": 42.5, "verified": True},
+            {"name": "TABLE_2_CURRENT_5DR_RUN", "items": ["PVPO", None, -0.0]},
         ],
         "source_payload_hash": "source-abc",
     }
-    assert semantic_presentation_hash(basis) == "43cab49103f841c9a85d2213756ecb6db2ee54cbdbb5c0ec6545cc7dbb80b020"
+    assert semantic_presentation_hash(basis) == "c7ab9fc4e43a3d10460f99b1e8bada4147e85f4878880ddd12c08bf66c4b0127"
 
 
-def test_5dr_snapshot_requires_exact_two_table_master_order():
+def test_5dr_snapshot_requires_current_v212_two_table_order():
     snapshot = build_presentation_snapshot(
-        run_id="run-1",
+        run_id=42,
         result_id="forecast-1",
         governance_state="SELECTED",
         source_payload_hash="source-1",
         sections=[
-            {"name": "TABLE_1_5DR_OUTCOME", "rows": []},
-            {"name": "TABLE_2_5DR_DRILL_DOWN", "rows": []},
+            {"name": "TABLE_1_5DR_ASSESSMENT_EFFICACY", "rows": []},
+            {"name": "TABLE_2_CURRENT_5DR_RUN", "rows": []},
         ],
     )
     assert snapshot["engine"] == "5DR"
-    assert snapshot["identity"]["result_id"] == "forecast-1"
+    assert snapshot["identity"] == {"run_id": "42", "result_id": "forecast-1", "checkpoint_id": None}
     assert_presentation_snapshot(snapshot)
 
     with pytest.raises(ValueError, match="PRESENTATION_5DR_SECTION_ORDER_MISMATCH"):
         build_presentation_snapshot(
-            run_id="run-1",
+            run_id=42,
             result_id="forecast-1",
             governance_state="SELECTED",
             source_payload_hash="source-1",
             sections=[
-                {"name": "TABLE_2_5DR_DRILL_DOWN"},
+                {"name": "TABLE_2_CURRENT_5DR_RUN"},
+                {"name": "TABLE_1_5DR_ASSESSMENT_EFFICACY"},
+            ],
+        )
+
+    with pytest.raises(ValueError, match="PRESENTATION_5DR_SECTION_ORDER_MISMATCH"):
+        build_presentation_snapshot(
+            run_id=42,
+            result_id="forecast-1",
+            governance_state="SELECTED",
+            source_payload_hash="source-1",
+            sections=[
                 {"name": "TABLE_1_5DR_OUTCOME"},
+                {"name": "TABLE_2_5DR_DRILL_DOWN"},
+            ],
+        )
+
+
+def test_5dr_issuance_presentation_cannot_bind_to_outcome_checkpoint():
+    with pytest.raises(ValueError, match="PRESENTATION_5DR_CHECKPOINT_MUST_BE_NULL"):
+        build_presentation_snapshot(
+            run_id=42,
+            result_id="forecast-1",
+            checkpoint_id="D+1",
+            governance_state="SELECTED",
+            source_payload_hash="source-1",
+            sections=[
+                {"name": "TABLE_1_5DR_ASSESSMENT_EFFICACY"},
+                {"name": "TABLE_2_CURRENT_5DR_RUN"},
             ],
         )
 
 
 def test_tamper_fails_closed():
     snapshot = build_presentation_snapshot(
-        run_id="run-1",
+        run_id=42,
         result_id="forecast-1",
         governance_state="SELECTED",
         source_payload_hash="source-1",
         sections=[
-            {"name": "TABLE_1_5DR_OUTCOME", "decision": "NO_TRADE"},
-            {"name": "TABLE_2_5DR_DRILL_DOWN", "status": "VERIFIED"},
+            {"name": "TABLE_1_5DR_ASSESSMENT_EFFICACY", "decision": "NO_TRADE"},
+            {"name": "TABLE_2_CURRENT_5DR_RUN", "status": "VERIFIED"},
         ],
     )
     snapshot["governance_state"] = "REJECTED"
@@ -68,11 +95,15 @@ def test_tamper_fails_closed():
         assert_presentation_snapshot(snapshot)
 
 
-def test_migration_is_append_only_and_null_checkpoint_identity_is_unique():
+def test_migration_binds_native_run_and_forecast_identity_and_is_append_only():
     sql = Path("migrations/009_p0_11_presentation_snapshots.sql").read_text(encoding="utf-8")
-    assert "CREATE TABLE IF NOT EXISTS presentation_snapshots" in sql
+    assert "run_id bigint NOT NULL REFERENCES public.runs(run_id)" in sql
+    assert "result_id text NOT NULL REFERENCES public.forecasts(forecast_id)" in sql
+    assert "checkpoint_id text CHECK (checkpoint_id IS NULL)" in sql
     assert "jsonb_array_length(sections)=2" in sql
-    assert "COALESCE(checkpoint_id,'')" in sql
+    assert "ON public.presentation_snapshots(run_id,result_id)" in sql
+    assert "forecast_run <> NEW.run_id" in sql
+    assert "presentation_snapshots_validate_identity" in sql
     assert "presentation_snapshots_no_update" in sql
     assert "presentation_snapshots_no_delete" in sql
-    assert "INSERT INTO presentation_snapshots" not in sql
+    assert "INSERT INTO public.presentation_snapshots" not in sql
