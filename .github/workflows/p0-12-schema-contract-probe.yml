@@ -1,0 +1,75 @@
+name: P0-12 5DR Schema Contract Probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  schema-contract:
+    if: github.head_ref == 'p0-12-schema-contract-probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet psycopg2-binary
+      - name: Read schema contract only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          python - <<'PY' | tee p0-12-5dr-schema.json
+          import json, os
+          import psycopg2
+          from psycopg2.extras import RealDictCursor
+
+          tables = [
+              'canonical_selections','forecasts','runs','forecast_governance','lineage_deltas',
+              'daily_forecasts','component_scores','execution_plans','evidence_items','forecast_evidence',
+              'forecast_checkpoint_evaluations','recommendation_events','assessment_snapshots'
+          ]
+          with psycopg2.connect(os.environ['DATABASE_URL']) as conn:
+              with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                  cur.execute("""
+                    select table_name,column_name,data_type,is_nullable,ordinal_position
+                      from information_schema.columns
+                     where table_schema='public' and table_name=any(%s)
+                     order by table_name,ordinal_position
+                  """, (tables,))
+                  cols = cur.fetchall()
+                  cur.execute("""
+                    select table_name
+                      from information_schema.tables
+                     where table_schema='public' and table_name=any(%s)
+                     order by table_name
+                  """, (tables,))
+                  present = [r['table_name'] for r in cur.fetchall()]
+                  cur.execute("""
+                    select selection_status,count(*)::int as count
+                      from canonical_selections
+                     group by selection_status
+                     order by selection_status
+                  """)
+                  canonical_counts = cur.fetchall()
+          print(json.dumps({
+              'probe':'P0_12_5DR_SCHEMA_CONTRACT',
+              'requested_tables':tables,
+              'present_tables':present,
+              'columns':cols,
+              'canonical_selection_counts':canonical_counts,
+              'credential_values_emitted':False,
+              'row_payloads_emitted':False,
+          }, default=str, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p0-12-5dr-schema-contract
+          path: p0-12-5dr-schema.json
+          retention-days: 7
