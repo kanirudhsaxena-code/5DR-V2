@@ -1,1 +1,1 @@
-2026-09-22 portfolio exact day pnl\n
+2026-09-29 reconcile close vs prior trading day
