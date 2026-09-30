@@ -1,1 +1,1 @@
-2026-09-29 reconcile close vs prior trading day
+2026-09-30 reconcile live portfolio vs prior trading day 10:32 IST
