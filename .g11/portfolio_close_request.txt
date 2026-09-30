@@ -1,1 +1,1 @@
-2026-09-30 reconcile live portfolio vs prior trading day 10:32 IST
+2026-09-30 reconcile session close portfolio vs prior trading day 21:41 IST
