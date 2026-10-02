@@ -1,0 +1,483 @@
+"""Build the canonical 5DR assessment handoff from production lifecycle state.
+
+This is the single governed builder used by both the scheduled lifecycle wrapper
+and the on-demand pre-execution refresh workflow. It intentionally preserves the
+existing assessment methodology and only refreshes the handoff snapshot.
+"""
+
+import json, os
+from datetime import datetime, timezone
+import psycopg2
+
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
+try:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT selected_forecast_id
+            FROM canonical_selections
+            WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+            ORDER BY target_trading_date DESC
+            LIMIT 1
+        """)
+        source = cur.fetchone()
+        if not source:
+            print("assessment_publish_skipped=no_canonical_forecast")
+            raise SystemExit(0)
+        forecast_id = source[0]
+
+        cur.execute("""
+            SELECT target_trading_date,selection_status,selection_rule,selection_reason,
+                   selected_forecast_id,selected_at
+            FROM canonical_selections
+            ORDER BY target_trading_date DESC
+            LIMIT 1
+        """)
+        canonical_row = cur.fetchone()
+        canonical_selection = None
+        if canonical_row:
+            target_date,selection_status,selection_rule,selection_reason,selected_id,selected_at = canonical_row
+            if target_date < datetime(2026,9,22,tzinfo=timezone.utc).date():
+                canonical_type = "LEGACY_CANONICAL" if selection_status=="SELECTED" else "LEGACY_CANONICAL_MISSED"
+                governance_era = "LEGACY"
+            else:
+                canonical_type = str(selection_rule or ("CANONICAL_MISSED" if selection_status!="SELECTED" else "PREOPEN_CANONICAL"))
+                governance_era = "POST_GOVERNANCE"
+            canonical_selection = {
+                "target_trading_date": target_date.isoformat(),
+                "selection_status": selection_status,
+                "canonical_type": canonical_type,
+                "selection_rule": selection_rule,
+                "selected_forecast_id": selected_id,
+                "selected_at": selected_at.isoformat() if selected_at else None,
+                "selection_reason": selection_reason,
+                "governance_era": governance_era,
+            }
+
+        cur.execute("""
+            WITH canon AS (
+              SELECT e.*
+              FROM v_latest_forecast_checkpoint_evaluation e
+              JOIN canonical_selections c
+                ON c.selected_forecast_id=e.forecast_id
+               AND c.selection_status='SELECTED'
+            )
+            SELECT day_number,
+                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE') AS scorable,
+                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit) AS hits,
+                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit) AS zone_hits,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit)
+                         /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS hit_rate_pct,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit)
+                         /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS zone_hit_rate_pct,
+                   ROUND(AVG(directional_margin_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_margin,
+                   ROUND(AVG(zone_error_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_zone_error,
+                   MAX(evaluated_at) AS last_evaluated_at
+            FROM canon
+            GROUP BY day_number
+            ORDER BY day_number
+        """)
+        horizon_rows = cur.fetchall()
+
+        cur.execute("""
+            SELECT CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER) AS day_number,
+                   COUNT(*) AS eligible_matured
+              FROM outcome_checkpoints oc
+              JOIN canonical_selections cs
+                ON cs.selected_forecast_id=oc.forecast_id
+               AND cs.selection_status='SELECTED'
+             WHERE oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')
+               AND (
+                 oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+                 OR (
+                   oc.due_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+                   AND (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::time >= time '15:40'
+                 )
+               )
+             GROUP BY CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER)
+             ORDER BY day_number
+        """)
+        eligible_rows = cur.fetchall()
+        eligible_by_day = {int(day): int(count or 0) for day,count in eligible_rows}
+
+        cur.execute("""
+            WITH canon AS (
+              SELECT e.*
+              FROM v_latest_forecast_checkpoint_evaluation e
+              JOIN canonical_selections c
+                ON c.selected_forecast_id=e.forecast_id
+               AND c.selection_status='SELECTED'
+              WHERE e.evaluation_status='SCORABLE'
+            )
+            SELECT COUNT(*) AS scorable,
+                   COUNT(*) FILTER (WHERE directional_hit) AS hits,
+                   COUNT(*) FILTER (WHERE zone_hit) AS zone_hits,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE directional_hit)/NULLIF(COUNT(*),0),2) AS accuracy,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE zone_hit)/NULLIF(COUNT(*),0),2) AS zone_accuracy,
+                   MAX(evaluated_at) AS assessed_at
+            FROM canon
+        """)
+        scorable, directional_hits, zone_hits, accuracy, zone_accuracy, forecast_assessed_at = cur.fetchone()
+        if forecast_assessed_at is None:
+            print("assessment_publish_skipped=no_scorable_checkpoint")
+            raise SystemExit(0)
+
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM outcome_checkpoints oc
+            JOIN canonical_selections c
+              ON c.selected_forecast_id=oc.forecast_id
+             AND c.selection_status='SELECTED'
+            WHERE oc.status='DUE'
+              AND oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+        """)
+        overdue = int(cur.fetchone()[0] or 0)
+
+        cur.execute("""
+            WITH selected AS (
+              SELECT selected_forecast_id AS forecast_id
+              FROM canonical_selections
+              WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+            ),
+            counts AS (
+              SELECT s.forecast_id,
+                     (SELECT COUNT(*) FROM daily_forecasts df WHERE df.forecast_id=s.forecast_id) AS daily_count,
+                     (SELECT COUNT(*) FROM outcome_checkpoints oc
+                        WHERE oc.forecast_id=s.forecast_id
+                          AND oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')) AS checkpoint_count
+              FROM selected s
+            )
+            SELECT COUNT(*) FILTER (WHERE daily_count<5 OR checkpoint_count<5)
+            FROM counts
+        """)
+        integrity_incomplete = int(cur.fetchone()[0] or 0)
+
+        cur.execute("""
+            WITH selected AS (
+              SELECT cs.target_trading_date,
+                     cs.selected_forecast_id AS forecast_id,
+                     f.recommendation
+              FROM canonical_selections cs
+              JOIN forecasts f ON f.forecast_id=cs.selected_forecast_id
+              WHERE cs.selection_status='SELECTED'
+                AND cs.selected_forecast_id IS NOT NULL
+            ),
+            terminal AS (
+              SELECT DISTINCT ON (re.forecast_id)
+                re.forecast_id,re.event_type,re.event_timestamp,re.pnl_pct,re.r_multiple
+              FROM recommendation_events re
+              JOIN selected s ON s.forecast_id=re.forecast_id
+              WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+              ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+            ),
+            event_clock AS (
+              SELECT MAX(re.event_timestamp) AS recommendation_as_of
+              FROM recommendation_events re
+              JOIN selected s ON s.forecast_id=re.forecast_id
+            )
+            SELECT
+              COUNT(*) FILTER (WHERE s.recommendation IN ('BUY_CE','BUY_PE','BUY_CONVEXITY')) AS actionable_calls,
+              COUNT(*) FILTER (WHERE s.recommendation='NO_TRADE') AS no_trade_calls,
+              COUNT(t.forecast_id) AS resolved,
+              COUNT(*) FILTER (WHERE t.event_type='T2_HIT') AS wins,
+              COUNT(*) FILTER (WHERE t.forecast_id IS NOT NULL AND t.event_type<>'T2_HIT') AS losses,
+              COUNT(*) FILTER (
+                WHERE s.recommendation IN ('BUY_CE','BUY_PE','BUY_CONVEXITY')
+                  AND t.forecast_id IS NULL
+              ) AS open_calls,
+              ROUND(
+                100.0*COUNT(*) FILTER (WHERE t.event_type='T2_HIT')
+                / NULLIF(COUNT(t.forecast_id),0),2
+              ) AS hit_rate_pct,
+              ROUND(AVG(t.r_multiple) FILTER (WHERE t.forecast_id IS NOT NULL),4) AS average_resolved_r,
+              ROUND(AVG(t.pnl_pct) FILTER (WHERE t.forecast_id IS NOT NULL),4) AS average_resolved_pnl_pct,
+              (SELECT recommendation_as_of FROM event_clock) AS recommendation_as_of
+            FROM selected s
+            LEFT JOIN terminal t ON t.forecast_id=s.forecast_id
+        """)
+        (
+          actionable_calls,no_trade_calls,resolved_recommendations,recommendation_wins,
+          recommendation_losses,open_recommendations,recommendation_hit_rate,
+          average_resolved_r,average_resolved_pnl,recommendation_as_of
+        ) = cur.fetchone()
+        rec = {
+            "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
+            "actionable_calls": int(actionable_calls or 0),
+            "no_trade_calls": int(no_trade_calls or 0),
+            "resolved": int(resolved_recommendations or 0),
+            "wins": int(recommendation_wins or 0),
+            "losses": int(recommendation_losses or 0),
+            "open": int(open_recommendations or 0),
+            "hit_rate_pct": float(recommendation_hit_rate) if recommendation_hit_rate is not None else None,
+            "hit_rate_fraction": f"{int(recommendation_wins or 0)}/{int(resolved_recommendations or 0)}",
+            "average_resolved_r": float(average_resolved_r) if average_resolved_r is not None else None,
+            "average_resolved_standardized_pnl_pct": float(average_resolved_pnl) if average_resolved_pnl is not None else None,
+        }
+
+        cur.execute("""
+            WITH terminal AS (
+              SELECT DISTINCT ON (re.forecast_id)
+                re.forecast_id,re.event_type,re.pnl_pct,re.event_timestamp
+              FROM recommendation_events re
+              JOIN canonical_selections c
+                ON c.selected_forecast_id=re.forecast_id
+               AND c.selection_status='SELECTED'
+              WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+              ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+            )
+            SELECT COALESCE(SUM(pnl_pct),0),
+                   COALESCE(SUM(pnl_pct) FILTER (WHERE event_type='T2_HIT'),0),
+                   COALESCE(SUM(pnl_pct) FILTER (WHERE event_type<>'T2_HIT'),0)
+            FROM terminal
+        """)
+        cumulative, hits_return, misses_return = cur.fetchone()
+
+        cur.execute("""
+            WITH selected AS (
+              SELECT cs.target_trading_date,cs.selected_forecast_id AS forecast_id
+              FROM canonical_selections cs
+              WHERE cs.selection_status='SELECTED'
+                AND cs.selected_forecast_id IS NOT NULL
+            ),
+            issued AS (
+              SELECT re.forecast_id,
+                     MIN(re.event_timestamp) FILTER (WHERE re.event_type='ISSUED') AS issued_at
+              FROM recommendation_events re
+              JOIN selected s ON s.forecast_id=re.forecast_id
+              GROUP BY re.forecast_id
+            ),
+            terminal AS (
+              SELECT DISTINCT ON (re.forecast_id)
+                re.forecast_id,re.event_type,re.event_timestamp,re.pnl_pct
+              FROM recommendation_events re
+              JOIN selected s ON s.forecast_id=re.forecast_id
+              WHERE re.event_type IN ('T2_HIT','SL_HIT','THESIS_EXIT','TIME_EXIT')
+              ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+            ),
+            resolved AS (
+              SELECT t.*, i.issued_at,
+                     (
+                       SELECT COUNT(*)
+                       FROM (
+                         SELECT DISTINCT target_trading_date
+                         FROM canonical_selections
+                         WHERE selection_status='SELECTED'
+                       ) d
+                       WHERE d.target_trading_date > (i.issued_at AT TIME ZONE 'Asia/Kolkata')::date
+                         AND d.target_trading_date <= (t.event_timestamp AT TIME ZONE 'Asia/Kolkata')::date
+                     )::int AS day_number
+              FROM terminal t
+              JOIN issued i USING (forecast_id)
+            )
+            SELECT day_number,
+                   COUNT(*) AS resolved,
+                   COUNT(*) FILTER (WHERE event_type='T2_HIT') AS hits,
+                   COUNT(*) FILTER (WHERE event_type<>'T2_HIT') AS misses,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE event_type='T2_HIT')/NULLIF(COUNT(*),0),2) AS hit_rate_pct,
+                   ROUND(SUM(pnl_pct),4) AS overall_pnl_pct,
+                   ROUND(SUM(pnl_pct) FILTER (WHERE event_type='T2_HIT'),4) AS hit_pnl_pct,
+                   ROUND(SUM(pnl_pct) FILTER (WHERE event_type<>'T2_HIT'),4) AS miss_pnl_pct
+            FROM resolved
+            WHERE day_number BETWEEN 1 AND 5
+            GROUP BY day_number
+            ORDER BY day_number
+        """)
+        day_recommendation_rows = cur.fetchall()
+
+        cur.execute("""
+            WITH latest_event AS (
+              SELECT DISTINCT ON (re.forecast_id)
+                re.forecast_id,re.event_type,re.event_timestamp,re.premium,re.pnl_pct,re.r_multiple
+              FROM recommendation_events re
+              ORDER BY re.forecast_id,re.event_timestamp DESC,re.event_id DESC
+            ),
+            canonical AS (
+              SELECT selected_forecast_id AS forecast_id,target_trading_date
+              FROM canonical_selections
+              WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
+            )
+            SELECT f.forecast_id,f.run_timestamp,f.definitive_forecast,f.recommendation,
+                   f.bull_probability,f.range_probability,f.bear_probability,
+                   ep.instrument,ep.strike,ep.expiry,ep.entry_low,ep.entry_high,
+                   ep.stop_premium,ep.target1_premium,ep.target2_premium,ep.expected_rr,
+                   le.event_type,le.event_timestamp,le.premium,le.pnl_pct,le.r_multiple,
+                   c.target_trading_date
+            FROM forecasts f
+            LEFT JOIN execution_plans ep USING (forecast_id)
+            LEFT JOIN latest_event le USING (forecast_id)
+            LEFT JOIN canonical c USING (forecast_id)
+            WHERE f.model_version='5DR_V2_1'
+            ORDER BY f.run_timestamp
+        """)
+        recommendation_ledger_rows = cur.fetchall()
+        recommendation_ledger = [
+            {
+                "forecast_id": row[0],
+                "run_timestamp": row[1].isoformat() if row[1] else None,
+                "definitive_forecast": row[2],
+                "recommendation": row[3],
+                "probabilities": {
+                    "BULL": float(row[4]),
+                    "RANGE": float(row[5]),
+                    "BEAR": float(row[6]),
+                },
+                "execution": {
+                    "instrument": row[7],
+                    "strike": float(row[8]) if row[8] is not None else None,
+                    "expiry": row[9].isoformat() if row[9] else None,
+                    "entry_low": float(row[10]) if row[10] is not None else None,
+                    "entry_high": float(row[11]) if row[11] is not None else None,
+                    "stop": float(row[12]) if row[12] is not None else None,
+                    "target1": float(row[13]) if row[13] is not None else None,
+                    "target2": float(row[14]) if row[14] is not None else None,
+                    "expected_rr": float(row[15]) if row[15] is not None else None,
+                },
+                "lifecycle": {
+                    "latest_event": row[16] or ("NO_TRADE" if row[3]=="NO_TRADE" else "ENTRY_NOT_VERIFIABLE"),
+                    "event_timestamp": row[17].isoformat() if row[17] else None,
+                    "premium": float(row[18]) if row[18] is not None else None,
+                    "pnl_pct": float(row[19]) if row[19] is not None else None,
+                    "r_multiple": float(row[20]) if row[20] is not None else None,
+                },
+                "canonical_target_trading_date": row[21].isoformat() if row[21] else None,
+            }
+            for row in recommendation_ledger_rows
+        ]
+        assessed_at = max(
+            timestamp
+            for timestamp in (forecast_assessed_at,recommendation_as_of)
+            if timestamp is not None
+        )
+finally:
+    conn.close()
+
+def horizon_label(day_number: int) -> str:
+    return "D" if int(day_number)==1 else f"D+{int(day_number)-1}"
+
+day_metrics = {
+    horizon_label(d): {
+        "status": "NOT DUE",
+        "eligible_matured": 0,
+        "scorable": 0,
+        "missing_unscorable": 0,
+        "coverage_pct": None,
+        "hits": 0,
+        "zone_scorable": 0,
+        "zone_hits": 0,
+        "hit_rate_pct": None,
+        "zone_hit_rate_pct": None,
+        "avg_directional_margin_points": None,
+        "avg_zone_error_points": None,
+    }
+    for d in range(1, 6)
+}
+for day_number, n, hits, zhits, hit_rate, zrate, avg_margin, avg_zone_error, _ in horizon_rows:
+    day_metrics[horizon_label(int(day_number))] = {
+        "status": "SCORABLE" if int(n or 0) else "NOT DUE",
+        "scorable": int(n or 0),
+        "hits": int(hits or 0),
+        "zone_scorable": int(n or 0),
+        "zone_hits": int(zhits or 0),
+        "hit_rate_pct": float(hit_rate) if hit_rate is not None else None,
+        "zone_hit_rate_pct": float(zrate) if zrate is not None else None,
+        "avg_directional_margin_points": float(avg_margin) if avg_margin is not None else None,
+        "avg_zone_error_points": float(avg_zone_error) if avg_zone_error is not None else None,
+    }
+
+for day_number in range(1,6):
+    key=horizon_label(day_number)
+    eligible=int(eligible_by_day.get(day_number,0))
+    scored=int(day_metrics[key].get("scorable") or 0)
+    day_metrics[key]["eligible_matured"]=eligible
+    day_metrics[key]["missing_unscorable"]=max(eligible-scored,0)
+    day_metrics[key]["coverage_pct"]=round(100.0*scored/eligible,2) if eligible else None
+    if eligible and scored < eligible:
+        day_metrics[key]["status"]="PARTIAL_SCORABLE" if scored else "MATURED_NOT_SCORABLE"
+    elif scored:
+        day_metrics[key]["status"]="SCORABLE"
+    else:
+        day_metrics[key]["status"]="NOT DUE"
+
+scorable = int(scorable or 0)
+directional_hits = int(directional_hits or 0)
+zone_hits = int(zone_hits or 0)
+eligible_matured_total = sum(int(day_metrics[horizon_label(d)]["eligible_matured"] or 0) for d in range(1,6))
+missing_unscorable_total = max(eligible_matured_total-scorable,0)
+scorable_coverage_pct = round(100.0*scorable/eligible_matured_total,2) if eligible_matured_total else None
+headline = f"{directional_hits}/{scorable} scorable canonical checkpoints directionally correct; {zone_hits}/{scorable} zone hits"
+if eligible_matured_total:
+    headline += f"; {scorable}/{eligible_matured_total} matured eligible checkpoints scorable"
+if overdue:
+    headline += f"; {overdue} overdue checkpoints still pending reconciliation"
+if integrity_incomplete:
+    headline += f"; {integrity_incomplete} canonical forecast(s) have incomplete frozen persistence"
+
+overall = {
+    "headline": headline,
+    "canonical_matured_eligible_checkpoints": eligible_matured_total,
+    "canonical_scorable_checkpoints": scorable,
+    "canonical_scorable": scorable,
+    "missing_unscorable_checkpoints": missing_unscorable_total,
+    "scorable_coverage_pct": scorable_coverage_pct,
+    "directional_hits": directional_hits,
+    "zone_hits": zone_hits,
+    "directional_accuracy_pct": float(accuracy) if accuracy is not None else None,
+    "zone_hit_rate_pct": float(zone_accuracy) if zone_accuracy is not None else None,
+    "pending_due_checkpoints": overdue,
+    "persistence_integrity_incomplete_forecasts": integrity_incomplete,
+    "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
+}
+
+metrics = {
+    "canonical_selection": canonical_selection,
+    "overall_forecast_metrics": overall,
+    "day_metrics": day_metrics,
+    "recommendation_metrics": rec,
+    "day_recommendation_metrics": {
+        **{horizon_label(d): {
+            "resolved": 0, "hits": 0, "misses": 0, "hit_rate_pct": None,
+            "overall_pnl_pct": None, "hit_pnl_pct": None, "miss_pnl_pct": None,
+        } for d in range(1, 6)},
+        **{horizon_label(int(day_number)): {
+            "resolved": int(resolved_count),
+            "hits": int(hit_count),
+            "misses": int(miss_count),
+            "hit_rate_pct": float(hit_rate) if hit_rate is not None else None,
+            "overall_pnl_pct": float(overall_pnl) if overall_pnl is not None else None,
+            "hit_pnl_pct": float(hit_pnl) if hit_pnl is not None else None,
+            "miss_pnl_pct": float(miss_pnl) if miss_pnl is not None else None,
+        } for day_number, resolved_count, hit_count, miss_count, hit_rate, overall_pnl, hit_pnl, miss_pnl in day_recommendation_rows}
+    },
+    "return_metrics": {
+        "cumulative_resolved_pnl_pct": float(cumulative or 0),
+        "hit_pnl_pct": float(hits_return or 0),
+        "miss_pnl_pct": float(misses_return or 0),
+        "method": "sum of resolved standardized model P&L percentages across selected DAILY_CANONICAL actionable recommendations only",
+        "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
+    },
+    "recommendation_ledger": recommendation_ledger,
+    "all_recommendations_count": len(recommendation_ledger),
+    "recommendation_ledger_complete": True,
+    "assessment_snapshot_complete": all(
+        key in day_metrics for key in ("D","D+1","D+2","D+3","D+4")
+    ),
+}
+wins = int((rec or {}).get("wins") or 0)
+resolved = int((rec or {}).get("resolved") or 0)
+payload = {
+    "engine": "5DR",
+    "forecast_id": forecast_id,
+    "assessed_at": assessed_at.isoformat(),
+    "outcome": f"{headline}; {wins}/{resolved} resolved recommendations won",
+    "score": float(accuracy) if accuracy is not None else None,
+    "metrics": metrics,
+}
+handoff = {
+    "schema_version": "5DR_ASSESSMENT_HANDOFF_V1",
+    "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+    "source": "5DR_CANONICAL_LIFECYCLE",
+    "assessment": payload,
+}
+with open("assessment-handoff.json","w",encoding="utf-8") as handle:
+    json.dump(handoff,handle,sort_keys=True,separators=(",",":"),default=str)
+    handle.write("\n")
+print("assessment_handoff_built")
