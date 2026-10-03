@@ -2,6 +2,14 @@ name: 5DR Assessment Handoff Refresh
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/assessment-refresh.yml'
+      - 'src/assessment_handoff_cli.py'
 
 permissions:
   contents: write
@@ -32,10 +40,47 @@ jobs:
           python -m pip install --disable-pip-version-check 'psycopg2-binary>=2.9,<3'
           python -m py_compile src/assessment_handoff_cli.py
 
-      - name: Build fresh canonical assessment handoff
+      - name: Verify authoritative 5DR database contract
         run: |
           set -euo pipefail
           test -n "$DATABASE_URL"
+          python - <<'PY'
+          import os
+          import psycopg2
+
+          conn=psycopg2.connect(os.environ['DATABASE_URL'])
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                      SELECT current_database(), current_schema(),
+                             to_regclass('public.canonical_selections'),
+                             to_regclass('public.forecasts'),
+                             to_regclass('public.outcome_checkpoints')
+                  """)
+                  database_name,current_schema,canonical,forecasts,checkpoints=cur.fetchone()
+                  assert canonical is not None, {
+                      'database':database_name,
+                      'schema':current_schema,
+                      'missing_relation':'public.canonical_selections',
+                  }
+                  assert forecasts is not None, {
+                      'database':database_name,
+                      'schema':current_schema,
+                      'missing_relation':'public.forecasts',
+                  }
+                  assert checkpoints is not None, {
+                      'database':database_name,
+                      'schema':current_schema,
+                      'missing_relation':'public.outcome_checkpoints',
+                  }
+                  print(f'FIVEDR_DATABASE_CONTRACT=PASS database={database_name} schema={current_schema}')
+          finally:
+              conn.close()
+          PY
+
+      - name: Build fresh canonical assessment handoff
+        run: |
+          set -euo pipefail
           python -m src.assessment_handoff_cli
           test -s assessment-handoff.json
 
