@@ -22,7 +22,7 @@ from experiments.preopen_retry import latest_intraday_with_retry
 from experiments.upstox_catalog import PublicInstrumentCatalog
 from experiments.upstox_instruments import resolve_global_instruments
 from experiments.upstox_quant_client import QuantReadOnlyClient
-from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
+from experiments.upstox_session import get_market_timings, get_nfo_market_status, select_session_valid_expiry
 from experiments.upstox_transport import CurlOpener
 from phase1.upstox import NIFTY, ReadOnlyClient, PipelineError
 
@@ -125,6 +125,11 @@ def acquire_preopen_bundle(token, *, now=None, completed_run_keys=()):
     window = classify_preopen_window(now)
     target_date = now.astimezone(IST).date()
     frozen_at = datetime.now(timezone.utc)
+
+    timings = get_market_timings(token, target_date)
+    exchanges = timings["exchanges"]
+    if "NSE" not in exchanges or "NFO" not in exchanges:
+        raise DataArchitectureError("preopen target is not an NSE/NFO trading day")
 
     legacy = ReadOnlyClient(token, opener=CurlOpener())
     contracts = legacy.contracts()
@@ -243,6 +248,9 @@ def acquire_preopen_bundle(token, *, now=None, completed_run_keys=()):
         "bundle_sha256": verification["bundle_sha256"],
         "run_key": verification["run_key"],
         "market_status": market_status["status"],
+        "market_timings_source": timings["source_path"],
+        "market_timings_sha256": timings["sha256"],
+        "nse_trading_day_verified": True,
         "forecast_released": False,
         "production_5dr_write_enabled": False,
         "lifecycle_write_enabled": False,
