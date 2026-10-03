@@ -2,7 +2,7 @@ import json
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
-from experiments.upstox_session import get_nfo_market_status, select_session_valid_expiry
+from experiments.upstox_session import get_market_timings, get_nfo_market_status, select_session_valid_expiry
 from phase1.upstox import PipelineError
 
 
@@ -32,6 +32,33 @@ class FakeOpener:
 
 
 class SessionTests(unittest.TestCase):
+
+    def test_market_timings_identifies_open_nse_and_nfo_date(self):
+        opener = FakeOpener({
+            "status": "success",
+            "data": [
+                {"exchange": "NSE", "start_time": 1791162900000, "end_time": 1791187200000},
+                {"exchange": "NFO", "start_time": 1791162900000, "end_time": 1791187800000},
+                {"exchange": "MCX", "start_time": 1791162000000, "end_time": 1791210600000},
+            ],
+        })
+        result = get_market_timings("secret", date(2026, 10, 5), opener=opener)
+        self.assertIn("NSE", result["exchanges"])
+        self.assertIn("NFO", result["exchanges"])
+        self.assertEqual(opener.request.get_method(), "GET")
+        self.assertEqual(opener.request.full_url, "https://api.upstox.com/v2/market/timings/2026-10-05")
+
+    def test_market_timings_preserves_closed_holiday_as_missing_exchange_rows(self):
+        opener = FakeOpener({"status": "success", "data": [{"exchange": "MCX", "start_time": 1790902800000, "end_time": 1790951400000}]})
+        result = get_market_timings("secret", date(2026, 10, 2), opener=opener)
+        self.assertNotIn("NSE", result["exchanges"])
+        self.assertNotIn("NFO", result["exchanges"])
+
+    def test_market_timings_malformed_row_fails_closed(self):
+        opener = FakeOpener({"status": "success", "data": [{"exchange": "NFO", "start_time": 10, "end_time": 5}]})
+        with self.assertRaises(PipelineError):
+            get_market_timings("secret", date(2026, 10, 5), opener=opener)
+
     def test_closed_expiry_day_rolls_to_next_expiry(self):
         self.assertEqual(
             select_session_valid_expiry(["2026-09-15", "2026-09-22"], date(2026, 9, 15), "NORMAL_CLOSE"),
