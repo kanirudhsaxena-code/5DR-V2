@@ -10,17 +10,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from experiments.live_shadow_bundle_option_enrichment import (
     build_live_shadow_bundle,
     build_public_judgment_summary,
 )
+from experiments.console_preopen_evidence import run as run_preopen_evidence
 from experiments.upstox_safe_diagnostics import diagnostic_code
+from experiments.upstox_session import get_market_timings
 
 SCHEMA = "5dr-console-market-evidence-v1"
 PROVIDER = "UPSTOX"
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def _safe_side_effects(bundle: dict) -> None:
@@ -170,11 +174,49 @@ def blocked_payload(request_id: str, code: str) -> dict:
     }
 
 
+def _user_preopen_clock(now: datetime) -> bool:
+    local = now.astimezone(IST)
+    clock = local.timetz().replace(tzinfo=None)
+    return local.weekday() < 5 and time(9, 10) <= clock < time(9, 15)
+
+
+def _as_user_preopen_snapshot(payload: dict) -> dict:
+    if payload.get("status") != "AUTOMATED_MARKET_DATA_READY":
+        return payload
+    previous_session = None
+    for item in payload.get("observations") or []:
+        if not isinstance(item, dict) or item.get("category") != "PRICE_TECHNICALS":
+            continue
+        structured = item.get("structured_data")
+        if isinstance(structured, dict):
+            previous_session = structured.get("previous_session_date")
+            break
+    payload = dict(payload)
+    payload.update({
+        "trigger_type": "USER",
+        "evidence_mode": "PREOPEN",
+        "market_session_as_of": previous_session,
+        "research_as_of": payload.get("captured_at"),
+        "target_session": payload.get("target_session_date"),
+        "benchmark_role": "NONE",
+    })
+    return payload
+
+
 def run(request_id: str) -> dict:
     token = os.environ.get("UPSTOX_ANALYTICS_TOKEN", "").strip()
     if not token:
         return blocked_payload(request_id, "UPSTOX_TOKEN_MISSING")
     try:
+        now = datetime.now(IST)
+        if _user_preopen_clock(now):
+            # A user request during the genuine matching window should consume the
+            # dedicated pre-open evidence path, but it is not the scheduled benchmark.
+            # Market timings distinguish a real session from a weekday holiday.
+            timings = get_market_timings(token, now.date())
+            exchanges = timings.get("exchanges") or {}
+            if "NSE" in exchanges and "NFO" in exchanges:
+                return _as_user_preopen_snapshot(run_preopen_evidence(request_id))
         bundle = build_live_shadow_bundle(token)
         summary = build_public_judgment_summary(bundle)
         return build_console_payload(request_id, bundle, summary)
