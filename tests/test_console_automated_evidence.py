@@ -24,6 +24,12 @@ def fake_bundle():
             "trading_enabled": False,
             "canonical_integration_enabled": False,
             "methodology_changed": False,
+            "evidence_mode": "CLOSED_SESSION",
+            "market_session_as_of": "2026-09-18",
+            "research_as_of": "2026-09-19T05:00:00+00:00",
+            "target_session": "2026-09-21",
+            "trigger_type": "USER",
+            "benchmark_role": "NONE",
         },
     }
 
@@ -54,6 +60,12 @@ class ConsoleAutomatedEvidenceTests(unittest.TestCase):
         self.assertTrue({"PRICE_TECHNICALS", "DERIVATIVES_OI", "MARKET_TRUST", "EXECUTION_RISK"} <= categories)
         self.assertFalse(payload["trading_enabled"])
         self.assertFalse(payload["forecast_release_enabled"])
+        self.assertEqual(payload["trigger_type"], "USER")
+        self.assertEqual(payload["evidence_mode"], "CLOSED_SESSION")
+        self.assertEqual(payload["market_session_as_of"], "2026-09-18")
+        self.assertEqual(payload["research_as_of"], "2026-09-19T05:00:00+00:00")
+        self.assertEqual(payload["target_session"], "2026-09-21")
+        self.assertEqual(payload["benchmark_role"], "NONE")
         text = json.dumps(payload).lower()
         for forbidden in ("authorization", "client_secret", "access_token", "raw_payload"):
             self.assertNotIn(forbidden, text)
