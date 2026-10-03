@@ -1,11 +1,9 @@
 name: 5DR PREOPEN Validation Gate
 
 on:
+  # Manual validation only. Production pre-open timing authority is the
+  # EDGE Console Cloudflare Cron at 08:50 and 09:10-09:14 IST.
   workflow_dispatch:
-  schedule:
-    # 09:10 IST weekdays. NSE pre-open is active and matching/opening-price
-    # determination is underway; normal market does not open until 09:15.
-    - cron: '40 3 * * 1-5'
 
 permissions:
   contents: read
