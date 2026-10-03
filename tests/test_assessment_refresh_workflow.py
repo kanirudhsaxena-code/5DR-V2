@@ -14,6 +14,18 @@ def test_on_demand_assessment_refresh_reuses_canonical_builder():
     assert 'state/assessment-handoff' in workflow
 
 
+def test_assessment_refresh_stays_fresh_at_authoritative_source():
+    workflow=(ROOT/'.github/workflows/assessment-refresh.yml').read_text(encoding='utf-8')
+    assert "cron: '17,47 * * * *'" in workflow
+    assert 'branches:' in workflow
+    assert '- main' in workflow
+    assert "'src/assessment_handoff_cli.py'" in workflow
+    assert "'public.canonical_selections'" in workflow
+    assert "'public.forecasts'" in workflow
+    assert "'public.outcome_checkpoints'" in workflow
+    assert 'FIVEDR_DATABASE_CONTRACT=PASS' in workflow
+
+
 def test_on_demand_refresh_keeps_freshness_and_completeness_checks():
     workflow=(ROOT/'.github/workflows/assessment-refresh.yml').read_text(encoding='utf-8')
     required=(
