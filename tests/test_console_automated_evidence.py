@@ -1,10 +1,14 @@
 import json
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from experiments.console_automated_evidence import (
     SCHEMA,
     blocked_payload,
     build_console_payload,
+    _as_user_preopen_snapshot,
+    _user_preopen_clock,
 )
 
 
@@ -24,6 +28,12 @@ def fake_bundle():
             "trading_enabled": False,
             "canonical_integration_enabled": False,
             "methodology_changed": False,
+            "evidence_mode": "CLOSED_SESSION",
+            "market_session_as_of": "2026-09-18",
+            "research_as_of": "2026-09-19T05:00:00+00:00",
+            "target_session": "2026-09-21",
+            "trigger_type": "USER",
+            "benchmark_role": "NONE",
         },
     }
 
@@ -54,6 +64,12 @@ class ConsoleAutomatedEvidenceTests(unittest.TestCase):
         self.assertTrue({"PRICE_TECHNICALS", "DERIVATIVES_OI", "MARKET_TRUST", "EXECUTION_RISK"} <= categories)
         self.assertFalse(payload["trading_enabled"])
         self.assertFalse(payload["forecast_release_enabled"])
+        self.assertEqual(payload["trigger_type"], "USER")
+        self.assertEqual(payload["evidence_mode"], "CLOSED_SESSION")
+        self.assertEqual(payload["market_session_as_of"], "2026-09-18")
+        self.assertEqual(payload["research_as_of"], "2026-09-19T05:00:00+00:00")
+        self.assertEqual(payload["target_session"], "2026-09-21")
+        self.assertEqual(payload["benchmark_role"], "NONE")
         text = json.dumps(payload).lower()
         for forbidden in ("authorization", "client_secret", "access_token", "raw_payload"):
             self.assertNotIn(forbidden, text)
@@ -69,6 +85,30 @@ class ConsoleAutomatedEvidenceTests(unittest.TestCase):
         bundle["screenshot_policy"]["screenshot_dependency"] = True
         with self.assertRaises(ValueError):
             build_console_payload("5drreq_test", bundle, fake_summary())
+
+
+    def test_user_preopen_clock_is_narrow_and_weekday_only(self):
+        ist = ZoneInfo("Asia/Kolkata")
+        self.assertTrue(_user_preopen_clock(datetime(2026, 9, 21, 9, 12, tzinfo=ist)))
+        self.assertFalse(_user_preopen_clock(datetime(2026, 9, 21, 9, 15, tzinfo=ist)))
+        self.assertFalse(_user_preopen_clock(datetime(2026, 9, 20, 9, 12, tzinfo=ist)))
+
+    def test_user_preopen_payload_never_claims_benchmark_role(self):
+        payload = {
+            "status": "AUTOMATED_MARKET_DATA_READY",
+            "captured_at": "2026-09-21T03:42:00+00:00",
+            "target_session_date": "2026-09-21",
+            "observations": [{
+                "category": "PRICE_TECHNICALS",
+                "structured_data": {"previous_session_date": "2026-09-18"},
+            }],
+        }
+        out = _as_user_preopen_snapshot(payload)
+        self.assertEqual(out["trigger_type"], "USER")
+        self.assertEqual(out["evidence_mode"], "PREOPEN")
+        self.assertEqual(out["market_session_as_of"], "2026-09-18")
+        self.assertEqual(out["target_session"], "2026-09-21")
+        self.assertEqual(out["benchmark_role"], "NONE")
 
 
 if __name__ == "__main__":

@@ -65,6 +65,12 @@ class ConsolePreopenEvidenceTests(unittest.TestCase):
         self.assertEqual(payload["schema"], SCHEMA)
         self.assertEqual(payload["status"], "AUTOMATED_MARKET_DATA_READY")
         self.assertEqual(payload["session_mode"], "PREOPEN_MATCHING")
+        self.assertEqual(payload["trigger_type"], "SCHEDULED")
+        self.assertEqual(payload["evidence_mode"], "PREOPEN")
+        self.assertEqual(payload["market_session_as_of"], "2026-10-01")
+        self.assertEqual(payload["research_as_of"], "2026-10-05T03:41:00+00:00")
+        self.assertEqual(payload["target_session"], "2026-10-05")
+        self.assertEqual(payload["benchmark_role"], "SESSION_PREOPEN")
         self.assertFalse(payload["trading_enabled"])
         self.assertFalse(payload["forecast_release_enabled"])
         categories = {row["category"] for row in payload["observations"]}

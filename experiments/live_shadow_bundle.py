@@ -392,6 +392,7 @@ def build_live_shadow_bundle(token):
         and isinstance(row.get("expiry"), str) and date.fromisoformat(row["expiry"]) >= today
     })
     market_status = get_nfo_market_status(token)
+    market_closed = market_status["status"] in CLOSED_STATUSES
     expiry = select_session_valid_expiry(expiries, today, market_status["status"])
 
     catalogs = PublicInstrumentCatalog()
@@ -407,8 +408,13 @@ def build_live_shadow_bundle(token):
     nifty_quote = _quote_snapshot(domestic_map[NIFTY])
     vix_quote = _quote_snapshot(domestic_map[INDIA_VIX])
     future_quote = _quote_snapshot(domestic_map[future["instrument_key"]])
+    domestic_freshness = "SESSION_FINAL" if market_closed else "LIVE"
     for snapshot in (nifty_quote, vix_quote, future_quote):
-        _require_recent(snapshot["timestamp"], frozen_at)
+        if market_closed:
+            snapshot["snapshot_basis"] = "UPSTOX_MARKET_CLOSED_CARRY_FORWARD"
+        else:
+            _require_recent(snapshot["timestamp"], frozen_at)
+    market_session_as_of = _stamp(nifty_quote["timestamp"]).astimezone(IST).date()
 
     history_cfg = {
         "5m": ("minutes", 5, 4),
@@ -481,7 +487,10 @@ def build_live_shadow_bundle(token):
         for side in ("CE", "PE"):
             key = strike[side]["instrument_key"]
             snap = _quote_snapshot(option_map[key])
-            _require_recent(snap["timestamp"], frozen_at)
+            if market_closed:
+                snap["snapshot_basis"] = "UPSTOX_MARKET_CLOSED_CARRY_FORWARD"
+            else:
+                _require_recent(snap["timestamp"], frozen_at)
             option_snapshot_times.append(_stamp(snap["timestamp"]))
             row[side] = {"instrument_key": key, "trading_symbol": strike[side]["trading_symbol"], **snap}
         option_sample.append(row)
@@ -489,7 +498,7 @@ def build_live_shadow_bundle(token):
     analytics = {}
     analytics_envs = []
     for name in ("oi", "change_oi", "pcr", "max_pain"):
-        kwargs = {"expiry": expiry, "date_value": today.isoformat()}
+        kwargs = {"expiry": expiry, "date_value": (market_session_as_of if market_closed else today).isoformat()}
         if name == "change_oi":
             kwargs["interval"] = 1
         elif name in {"pcr", "max_pain"}:
@@ -512,12 +521,18 @@ def build_live_shadow_bundle(token):
     participation_times = []
     for key in participation.heavyweight_keys:
         snap = _quote_snapshot(participation_map[key])
-        _require_recent(snap["timestamp"], frozen_at)
+        if market_closed:
+            snap["snapshot_basis"] = "UPSTOX_MARKET_CLOSED_CARRY_FORWARD"
+        else:
+            _require_recent(snap["timestamp"], frozen_at)
         participation_times.append(_stamp(snap["timestamp"]))
         heavyweight_values[key] = snap
     for key in participation.sector_index_keys:
         snap = _quote_snapshot(participation_map[key])
-        _require_recent(snap["timestamp"], frozen_at)
+        if market_closed:
+            snap["snapshot_basis"] = "UPSTOX_MARKET_CLOSED_CARRY_FORWARD"
+        else:
+            _require_recent(snap["timestamp"], frozen_at)
         participation_times.append(_stamp(snap["timestamp"]))
         sector_values[key] = snap
 
@@ -559,7 +574,7 @@ def build_live_shadow_bundle(token):
         timeframe="MULTI",
         provider_timestamp=nifty_quote["timestamp"],
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference="UPSTOX_COMPOSITE:NIFTY_PRICE_CANDLES",
         source_sha256=nifty_source_sha,
     ))
@@ -571,7 +586,7 @@ def build_live_shadow_bundle(token):
         timeframe="quote",
         provider_timestamp=vix_quote["timestamp"],
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference=domestic["source_path"],
         source_sha256=domestic["sha256"],
     ))
@@ -590,7 +605,7 @@ def build_live_shadow_bundle(token):
         timeframe="quote",
         provider_timestamp=future_quote["timestamp"],
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference=domestic["source_path"],
         source_sha256=domestic["sha256"],
     ))
@@ -622,7 +637,7 @@ def build_live_shadow_bundle(token):
         timeframe="quote",
         provider_timestamp=option_provider_timestamp,
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference="UPSTOX_COMPOSITE:OPTION_CHAIN_AND_EXACT_QUOTES",
         source_sha256=_sha(chain["sha256"], option_quotes["sha256"]),
     ))
@@ -652,7 +667,7 @@ def build_live_shadow_bundle(token):
         timeframe="quote",
         provider_timestamp=participation_provider_timestamp,
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference=participation_env["source_path"],
         source_sha256=participation_env["sha256"],
     ))
@@ -664,7 +679,7 @@ def build_live_shadow_bundle(token):
         timeframe="quote",
         provider_timestamp=participation_provider_timestamp,
         acquisition_timestamp=frozen_at,
-        freshness="LIVE",
+        freshness=domestic_freshness,
         source_reference=participation_env["source_path"],
         source_sha256=participation_env["sha256"],
     ))
@@ -735,6 +750,13 @@ def build_live_shadow_bundle(token):
     )
     bundle["runtime_context"] = {
         "nfo_session": market_status["status"],
+        "evidence_mode": "CLOSED_SESSION" if market_closed else "LIVE_INTRADAY",
+        "market_session_as_of": market_session_as_of.isoformat(),
+        "research_as_of": freeze_final.isoformat(),
+        "target_session": None,
+        "target_session_resolution": "GOVERNANCE_LAYER_REQUIRED",
+        "trigger_type": "USER",
+        "benchmark_role": "NONE",
         "selected_nifty_expiry": expiry,
         "participation_approval_ref": participation.approval_ref,
         "source_semantic": SOURCE,
