@@ -77,6 +77,14 @@ def build_console_payload(request_id: str, bundle: dict, summary: dict) -> dict:
     option_chain = summary.get("option_chain") or {}
     underlying = option_chain.get("underlying_spot_price") if isinstance(option_chain, dict) else None
 
+    runtime = bundle.get("runtime_context") if isinstance(bundle.get("runtime_context"), dict) else {}
+    evidence_mode = runtime.get("evidence_mode")
+    market_session_as_of = runtime.get("market_session_as_of")
+    research_as_of = runtime.get("research_as_of") or frozen_at
+    target_session = runtime.get("target_session")
+    trigger_type = runtime.get("trigger_type") or "USER"
+    benchmark_role = runtime.get("benchmark_role") or "NONE"
+
     base = f"upstox-bundle://{digest}"
     observations = [
         _observation(
@@ -133,6 +141,12 @@ def build_console_payload(request_id: str, bundle: dict, summary: dict) -> dict:
         "provider": PROVIDER,
         "captured_at": frozen_at,
         "bundle_sha256": digest,
+        "trigger_type": trigger_type,
+        "evidence_mode": evidence_mode,
+        "market_session_as_of": market_session_as_of,
+        "research_as_of": research_as_of,
+        "target_session": target_session,
+        "benchmark_role": benchmark_role,
         "observations": observations,
         "blockers": [],
         "trading_enabled": False,
