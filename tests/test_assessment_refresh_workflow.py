@@ -16,7 +16,7 @@ def test_on_demand_assessment_refresh_reuses_canonical_builder():
 
 def test_assessment_refresh_stays_fresh_at_authoritative_source():
     workflow=(ROOT/'.github/workflows/assessment-refresh.yml').read_text(encoding='utf-8')
-    assert "cron: '17,47 * * * *'" in workflow
+    assert "cron: '7,27,47 * * * *'" in workflow
     assert 'branches:' in workflow
     assert '- main' in workflow
     assert "'src/assessment_handoff_cli.py'" in workflow
@@ -46,3 +46,9 @@ def test_canonical_builder_generates_new_snapshot_timestamp():
     assert '"source": "5DR_CANONICAL_LIFECYCLE"' in source
     assert '"recommendation_ledger_complete": True' in source
     assert '"assessment_snapshot_complete": all(' in source
+
+
+def test_assessment_refresh_has_multiple_attempts_inside_freshness_window():
+    workflow=(ROOT/'.github/workflows/assessment-refresh.yml').read_text(encoding='utf-8')
+    assert "cron: '7,27,47 * * * *'" in workflow
+    assert "six scheduled opportunities inside" in workflow
