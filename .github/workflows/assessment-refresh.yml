@@ -3,7 +3,10 @@ name: 5DR Assessment Handoff Refresh
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17,47 * * * *'
+    # Refresh three times per hour at off-peak minutes. The handoff freshness
+    # contract is two hours; this provides six scheduled opportunities inside
+    # that window and avoids depending on a single delayed GitHub cron tick.
+    - cron: '7,27,47 * * * *'
   push:
     branches:
       - main
