@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: BT100 fail-closed unit tests
-        run: python -m unittest tests.test_bt100_readiness -v
+        run: python -m unittest discover -s tests -p 'test_bt100_*.py' -v
       - name: Static readiness report
         run: python -m bt100.readiness --output .bt100/readiness-static.json
       - name: Assert static report has zero production-neuron budget
