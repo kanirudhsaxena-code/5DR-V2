@@ -122,13 +122,20 @@ jobs:
         with:
           python-version: '3.11'
       - name: Acquire isolated core quantitative history
+        id: core_history
+        continue-on-error: true
         run: |
           mkdir -p bt100_artifacts/core_history
           python -m bt100.run_core_history_backfill \
             --frozen-sessions bt100/config/frozen_sessions_v1.json \
             --output-dir bt100_artifacts/core_history \
             > bt100_artifacts/core_history_run.json
+      - name: Surface core-history failure diagnostic
+        if: always()
+        run: |
+          if [ -f bt100_artifacts/core_history/failure.json ]; then cat bt100_artifacts/core_history/failure.json; fi
       - name: Prove core-history safety declarations
+        if: steps.core_history.outcome == 'success'
         run: |
           python - <<'PY'
           import json
@@ -139,6 +146,7 @@ jobs:
           assert m['series_count'] > 0
           PY
       - name: Upload frozen core-history artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bt100-core-history-${{ github.sha }}
@@ -146,3 +154,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 9
+      - name: Enforce core-history result
+        if: always()
+        run: test "${{ steps.core_history.outcome }}" = "success"
