@@ -106,3 +106,42 @@ jobs:
       - name: Enforce live derivative readiness
         if: always()
         run: test "${{ steps.expired_probe.outcome }}" = "success"
+
+
+  core_history_backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: unit
+    env:
+      UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Acquire isolated core quantitative history
+        run: |
+          python -m bt100.run_core_history_backfill \
+            --frozen-sessions bt100/config/frozen_sessions_v1.json \
+            --output-dir bt100_artifacts/core_history \
+            > bt100_artifacts/core_history_run.json
+      - name: Prove core-history safety declarations
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('bt100_artifacts/core_history/manifest.json'))
+          assert m['production_writes'] == 0
+          assert m['production_neuron_calls'] == 0
+          assert m['trading_enabled'] is False
+          assert m['series_count'] > 0
+          PY
+      - name: Upload frozen core-history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bt100-core-history-${{ github.sha }}
+          path: bt100_artifacts/core_history
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
