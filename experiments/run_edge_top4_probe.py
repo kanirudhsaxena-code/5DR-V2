@@ -133,8 +133,10 @@ def main():
         mt=market_trust(mti)
         probs=probabilities(dscore,mt,"NORMAL")
 
-        stop=max(s10 if s10<ltp else ltp-1.15*a14, ltp-1.4*a14)
-        if stop>=ltp: stop=ltp-1.15*a14
+        support_candidate=max(s10 if s10<ltp else ltp-1.4*a14, ltp-1.4*a14)
+        # Do not let a moving-average touch create an unrealistically tiny risk.
+        stop=min(support_candidate, ltp-0.75*a14)
+        if stop>=ltp: stop=ltp-1.0*a14
         target=max(hi20 if hi20>ltp else ltp+1.8*a14, ltp+1.5*a14)
         risk=max(ltp-stop,0.01); reward=max(target-ltp,0.01); rr=reward/risk
         liq=clamp(55+20*math.log10(max(avgvol20,1)/100000),35,95)
