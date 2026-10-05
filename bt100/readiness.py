@@ -108,11 +108,14 @@ def build_report(config, requirements_doc, target_dates=None, probe=None):
     rows = validate_evidence(requirements_doc)
     blockers = []
     warnings = []
+    formal_evidence_blockers = []
     for row in rows:
         status = row["status"]
+        if row["critical"] and status not in {"PROVEN", "NOT_APPLICABLE"}:
+            formal_evidence_blockers.append(f"{row['id']}:{status}")
         if row["critical"] and status in {"MISSING", "CONTAMINATED"}:
             blockers.append(f"{row['id']}:{status}")
-        elif status in {"PROBE_REQUIRED", "PARTIAL", "EXTERNAL_ONLY"}:
+        elif status in {"PROBE_REQUIRED", "PARTIAL", "EXTERNAL_ONLY", "DOCUMENTED"}:
             warnings.append(f"{row['id']}:{status}")
 
     targets_valid = False
@@ -141,6 +144,7 @@ def build_report(config, requirements_doc, target_dates=None, probe=None):
         and baseline_frozen
         and targets_valid
         and not blockers
+        and not formal_evidence_blockers
         and probe_status in {"PASSED", "PARTIAL"}
     )
     phase = "FORMAL_REPLAY_READY" if formal_ready else (
@@ -159,6 +163,7 @@ def build_report(config, requirements_doc, target_dates=None, probe=None):
         "production_writes_allowed": config["production_writes_allowed"],
         "trading_allowed": config["trading_allowed"],
         "blockers": blockers,
+        "formal_evidence_blockers": formal_evidence_blockers,
         "warnings": warnings,
         "config_sha256": canonical_sha256(config),
         "evidence_requirements_sha256": canonical_sha256(requirements_doc),
