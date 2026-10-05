@@ -123,6 +123,7 @@ jobs:
           python-version: '3.11'
       - name: Acquire isolated core quantitative history
         run: |
+          mkdir -p bt100_artifacts/core_history
           python -m bt100.run_core_history_backfill \
             --frozen-sessions bt100/config/frozen_sessions_v1.json \
             --output-dir bt100_artifacts/core_history \
