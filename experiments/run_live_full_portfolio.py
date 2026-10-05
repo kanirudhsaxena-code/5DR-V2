@@ -1,45 +1,43 @@
-"""One-shot authenticated Upstox live snapshot for the user's 33-stock PMS holdings."""
+"""One-shot authenticated Upstox live snapshot for the user's 31-stock PMS holdings."""
 import json, os, subprocess
 from urllib.parse import urlencode
 from experiments.upstox_catalog import PublicInstrumentCatalog
 
 HOLDINGS={
-"ANANDRATHI":{"symbol":"ANANDRATHI","qty":62,"close22":2179.0,"cost":131362.89},
-"APOLLO":{"symbol":"APOLLO","qty":281,"close22":406.75,"cost":117583.78},
-"BEPL":{"symbol":"BEPL","qty":1806,"close22":130.23,"cost":237102.11},
-"CEIGALL":{"symbol":"CEIGALL","qty":763,"close22":380.0,"cost":289543.09},
-"EBGNG":{"symbol":"EBGNG","qty":464,"close22":692.3,"cost":282539.98},
+"ANANDRATHI":{"symbol":"ANANDRATHI","qty":62,"close22":2117.5,"cost":131362.89},
+"APOLLO":{"symbol":"APOLLO","qty":281,"close22":394.0,"cost":117583.78},
+"BEPL":{"symbol":"BEPL","qty":1806,"close22":123.76,"cost":237102.11},
+"CEIGALL":{"symbol":"CEIGALL","qty":763,"close22":380.1,"cost":289543.09},
+"EBGNG":{"symbol":"EBGNG","qty":668,"close22":704.7,"cost":425206.72},
 "GLS":{"symbol":"ALIVUS","qty":80,"close22":1374.2,"cost":115930.57},
-"INDGN":{"symbol":"INDGN","qty":420,"close22":592.1,"cost":240814.38},
-"IOLCP":{"symbol":"IOLCP","qty":853,"close22":200.39,"cost":141916.00},
-"JYOTICNC":{"symbol":"JYOTICNC","qty":279,"close22":1084.3,"cost":270242.46},
-"KISSHT":{"symbol":"KISSHT","qty":479,"close22":352.55,"cost":175074.26},
-"KSHINTL":{"symbol":"KSHINTL","qty":142,"close22":1040.95,"cost":144001.64},
-"LLOYDSENGG":{"symbol":"LLOYDSENGG","qty":820,"close22":85.73,"cost":69630.30},
-"LTFOODS":{"symbol":"LTFOODS","qty":278,"close22":421.35,"cost":114974.17},
-"OPTIEMUS":{"symbol":"OPTIEMUS","qty":206,"close22":708.9,"cost":123110.72},
-"PINELABS":{"symbol":"PINELABS","qty":2304,"close22":197.58,"cost":380258.25},
-"RAYMOND":{"symbol":"RAYMOND","qty":171,"close22":1116.95,"cost":115279.75},
-"REDINGTON":{"symbol":"REDINGTON","qty":382,"close22":410.35,"cost":144202.23},
-"RPEL":{"symbol":"RPEL","qty":108,"close22":1735.0,"cost":106562.96},
-"RUBICON":{"symbol":"RUBICON","qty":56,"close22":1671.2,"cost":96046.66},
-"SANSERA":{"symbol":"SANSERA","qty":24,"close22":4586.5,"cost":75260.35},
-"SMLMAH":{"symbol":"SMLMAH","qty":23,"close22":6719.5,"cost":150484.80},
-"STAR":{"symbol":"STAR","qty":97,"close22":1219.0,"cost":118022.38},
-"STLNETWORK":{"symbol":"STLNETWORK","qty":4098,"close22":47.34,"cost":151113.69},
-"STRTECH":{"symbol":"STLTECH","qty":358,"close22":839.55,"cost":199138.79},
-"SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2727.0,"cost":72726.61},
-"WINDLAS":{"symbol":"WINDLAS","qty":157,"close22":1102.3,"cost":172800.69},
-"WOCKPHARMA":{"symbol":"WOCKPHARMA","qty":86,"close22":2185.4,"cost":173915.52},
-"MEESHO":{"symbol":"MEESHO","qty":1243,"close22":240.19,"cost":230424.17},
-"SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":809.0,"cost":169840.60},
-"KANOHAR":{"symbol":"KANOHAR","qty":178,"close22":870.5,"cost":146196.54},
-"TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":756.4,"cost":181815.08},
-"TVSMOTOR":{"symbol":"TVSMOTOR","qty":9,"close22":4140.0,"cost":35951.43},
-"VBL":{"symbol":"VBL","qty":292,"close22":430.0,"cost":120217.91}
+"INDGN":{"symbol":"INDGN","qty":420,"close22":593.5,"cost":240814.38},
+"IOLCP":{"symbol":"IOLCP","qty":853,"close22":209.39,"cost":141916.00},
+"JYOTICNC":{"symbol":"JYOTICNC","qty":279,"close22":1032.1,"cost":270242.46},
+"KISSHT":{"symbol":"KISSHT","qty":479,"close22":371.15,"cost":175074.26},
+"KSB":{"symbol":"KSB","qty":181,"close22":806.45,"cost":155429.88},
+"LLOYDSENGG":{"symbol":"LLOYDSENGG","qty":4955,"close22":98.31,"cost":451287.08},
+"OPTIEMUS":{"symbol":"OPTIEMUS","qty":206,"close22":803.7,"cost":123110.72},
+"PINELABS":{"symbol":"PINELABS","qty":1180,"close22":167.59,"cost":199187.88},
+"REDINGTON":{"symbol":"REDINGTON","qty":608,"close22":397.95,"cost":236387.13},
+"ROLEXRINGS":{"symbol":"ROLEXRINGS","qty":937,"close22":196.36,"cost":182922.52},
+"RPEL":{"symbol":"RPEL","qty":55,"close22":1818.9,"cost":54536.50},
+"SMLMAH":{"symbol":"SMLMAH","qty":23,"close22":6251.0,"cost":150484.80},
+"STAR":{"symbol":"STAR","qty":97,"close22":1084.8,"cost":118022.38},
+"STLNETWORK":{"symbol":"STLNETWORK","qty":2521,"close22":47.18,"cost":94795.88},
+"STRTECH":{"symbol":"STLTECH","qty":358,"close22":955.35,"cost":199138.79},
+"SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
+"SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
+"WINDLAS":{"symbol":"WINDLAS","qty":157,"close22":1082.4,"cost":172800.69},
+"WOCKPHARMA":{"symbol":"WOCKPHARMA","qty":86,"close22":2083.9,"cost":173915.52},
+"MEESHO":{"symbol":"MEESHO","qty":757,"close22":218.69,"cost":148085.80},
+"SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
+"KANOHAR":{"symbol":"KANOHAR","qty":178,"close22":906.35,"cost":146196.54},
+"TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":792.15,"cost":181815.08},
+"CGPOWER":{"symbol":"CGPOWER","qty":132,"close22":879.0,"cost":115986.50},
+"VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=220842.89
+PMS_RESIDUAL=27572.28
 
 
 def main():
