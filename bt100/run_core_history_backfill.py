@@ -107,7 +107,24 @@ def run(token,frozen_sessions,output_dir):
     out.mkdir(parents=True,exist_ok=True)
     manifest_rows=[]
     for index,(category,key,tf,chunks) in enumerate(tasks, start=1):
-        series=_fetch_series(client,key,tf,chunks)
+        try:
+            series=_fetch_series(client,key,tf,chunks)
+        except Exception as error:
+            diagnostic={
+                "schema":"bt100-core-history-failure-v1",
+                "task_index":index,
+                "category":category,
+                "instrument_key":key,
+                "timeframe":tf,
+                "chunk_count":len(chunks),
+                "error_type":type(error).__name__,
+                "error":str(error),
+                "production_writes":0,
+                "production_neuron_calls":0,
+                "trading_enabled":False,
+            }
+            (out/"failure.json").write_text(json.dumps(diagnostic,sort_keys=True,indent=2)+"\\n",encoding="utf-8")
+            raise
         filename=f"{index:03d}_{hashlib.sha256(key.encode()).hexdigest()[:12]}_{tf}.json"
         (out/filename).write_text(json.dumps(series,sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")
         manifest_rows.append({
