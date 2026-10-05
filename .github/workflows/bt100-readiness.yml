@@ -67,6 +67,13 @@ jobs:
       - name: Surface sanitized expired-probe diagnostic
         if: always()
         run: cat .bt100/upstox_expired_probe.json
+      - name: Probe historical OI and change-OI independently
+        id: market_info_probe
+        continue-on-error: true
+        run: python -m bt100.upstox_market_info_probe > .bt100/upstox_market_info_probe.json
+      - name: Surface sanitized market-info diagnostic
+        if: always()
+        run: cat .bt100/upstox_market_info_probe.json
       - name: Build readiness certificate V0
         if: always()
         continue-on-error: true
