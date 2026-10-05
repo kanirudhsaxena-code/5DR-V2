@@ -131,7 +131,7 @@ def main():
             "evidence_freshness_completeness":95,
         }
         mt=market_trust(mti)
-        probs=probabilities(dscore,mt,"NORMAL")
+        probs=probabilities(dscore,mt,"HIGH")
 
         support_candidate=max(s10 if s10<ltp else ltp-1.4*a14, ltp-1.4*a14)
         # Do not let a moving-average touch create an unrealistically tiny risk.
@@ -161,7 +161,7 @@ def main():
             "atr14":round(a14,2),"rsi14":round(r14,1),"ret5_pct":round(ret5,2),"ret10_pct":round(ret10,2),"ret20_pct":round(ret20,2),
             "high20":round(hi20,2),"low20":round(lo20,2),"volume_ratio_partial_day":round(volratio,2),
             "component_scores":comps,"des5":dscore,"directional_label":directional_label(dscore),
-            "market_trust":mt,"market_trust_band":trust_band(mt),"probabilities":probs,
+            "market_trust":mt,"market_trust_band":trust_band(mt),"event_shock":"HIGH","probabilities":probs,
             "execution_edge_delivery_adapted":ee,"expected_rr":round(rr,2),"tradeable_delivery_adapted":trade,"blockers":block,
             "provisional_stop":round(stop,2),"provisional_target":round(target,2),"d_to_d4_zones_noncanonical":zones
         })
