@@ -61,14 +61,19 @@ jobs:
       - name: Select 100 independent matured target sessions
         run: python -m bt100.select_target_dates > .bt100/target_dates.json
       - name: Probe expired derivative entitlement and OI
+        id: expired_probe
+        continue-on-error: true
         run: python -m bt100.upstox_expired_probe > .bt100/upstox_expired_probe.json
       - name: Build readiness certificate V0
+        if: always()
+        continue-on-error: true
         run: |
           python -m bt100.readiness \
             --target-dates .bt100/target_dates.json \
             --probe .bt100/upstox_expired_probe.json \
             --output .bt100/readiness-v0.json
       - name: Prove zero production inference/write declarations
+        if: always()
         run: |
           python - <<'PY'
           import json
@@ -79,9 +84,14 @@ jobs:
               assert obj.get('trading_enabled',False) is False
           PY
       - name: Upload bounded readiness evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bt100-readiness-v0
           path: .bt100/*.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce live derivative readiness
+        if: always()
+        run: test "${{ steps.expired_probe.outcome }}" = "success"
