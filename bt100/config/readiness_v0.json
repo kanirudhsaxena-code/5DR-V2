@@ -1,0 +1,26 @@
+{
+  "schema": "bt100-readiness-config-v0",
+  "batch_id": "BT-5DR-100-V1",
+  "run_role": "REPLAY",
+  "official_efficacy_eligible": false,
+  "target_session_count": 100,
+  "horizons": [
+    "D+1",
+    "D+2",
+    "D+3",
+    "D+4",
+    "D+5"
+  ],
+  "formal_run_requires_g5_1_pass": true,
+  "g5_1_status": "PENDING",
+  "baseline_model_version": "5DR_V2_1",
+  "canonical_spec_version": "5DR V2.2.3",
+  "baseline_sha_state": "PENDING_G5_1_PASS",
+  "production_neuron_budget": 0,
+  "production_writes_allowed": false,
+  "trading_allowed": false,
+  "canonical_table_writes_allowed": false,
+  "methodology_tuning_allowed": false,
+  "evidence_policy": "POINT_IN_TIME_FAIL_CLOSED",
+  "missing_evidence_policy": "DATA_GAP_OR_NOT_SCORABLE"
+}
