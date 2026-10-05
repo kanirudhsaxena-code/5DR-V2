@@ -1,0 +1,133 @@
+{
+  "schema": "bt100-evidence-requirements-v0",
+  "requirements": [
+    {
+      "id": "NIFTY_PRICE_CANDLES",
+      "category": "PRICE_STRUCTURE",
+      "critical": true,
+      "status": "PROVEN",
+      "source": "Upstox historical candles",
+      "notes": "Existing representative live proof covers 5m/15m/30m/1h/1d."
+    },
+    {
+      "id": "INDIA_VIX",
+      "category": "PRICE_STRUCTURE",
+      "critical": true,
+      "status": "PROVEN",
+      "source": "Upstox historical candles",
+      "notes": "Existing representative daily proof; full cohort backfill still required."
+    },
+    {
+      "id": "NIFTY_EXPIRED_FUTURES",
+      "category": "PVPO",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox Expired Instruments API",
+      "notes": "Historical futures identity/basis must be entitlement-proven."
+    },
+    {
+      "id": "NIFTY_EXPIRED_OPTION_CONTRACTS",
+      "category": "PVPO",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox Expired Option Contracts API",
+      "notes": "Strike/expiry/CE-PE identity; Plus-plan entitlement must be proven."
+    },
+    {
+      "id": "NIFTY_EXPIRED_OPTION_OHLCV_OI",
+      "category": "PVPO",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox Expired Historical Candle API",
+      "notes": "Documented candle schema includes OHLC, volume and open interest."
+    },
+    {
+      "id": "NIFTY_HISTORICAL_OI_BY_STRIKE",
+      "category": "PVPO",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox /market/oi",
+      "notes": "Date-specific per-strike call/put OI is documented; live entitlement/coverage must be proven."
+    },
+    {
+      "id": "NIFTY_HISTORICAL_CHANGE_OI",
+      "category": "PVPO",
+      "critical": false,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox market information",
+      "notes": "Probe separately; otherwise derive only when timestamp-safe."
+    },
+    {
+      "id": "NIFTY_HISTORICAL_BID_ASK_IV",
+      "category": "EXECUTION_EDGE",
+      "critical": false,
+      "status": "PARTIAL",
+      "source": "No proven expired point-in-time chain snapshot yet",
+      "notes": "Expired candles do not by themselves establish historical bid/ask or IV. Exact reconstruction must fail closed when unavailable."
+    },
+    {
+      "id": "NIFTY_HEAVYWEIGHTS_SECTORS",
+      "category": "PARTICIPATION",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Approved structured market sources",
+      "notes": "Historical point-in-time coverage to be certified."
+    },
+    {
+      "id": "FII_DII_CASH",
+      "category": "PARTICIPATION",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Upstox/official historical data",
+      "notes": "Daily history required with publication-date discipline."
+    },
+    {
+      "id": "FII_INDEX_DERIVATIVES",
+      "category": "PARTICIPATION",
+      "critical": false,
+      "status": "PROBE_REQUIRED",
+      "source": "Approved structured/official source",
+      "notes": "Use only where frozen canonical logic consumes it."
+    },
+    {
+      "id": "GLOBAL_RISK_INDICES",
+      "category": "MACRO_CATALYSTS",
+      "critical": true,
+      "status": "PROVEN",
+      "source": "Upstox/global structured data + governed web fallback",
+      "notes": "Existing representative SP500 proof; full approved set still to backfill."
+    },
+    {
+      "id": "CRUDE_USDINR",
+      "category": "MACRO_CATALYSTS",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Structured provider + governed web fallback",
+      "notes": "Timestamp-safe historical context required."
+    },
+    {
+      "id": "DXY_RATES",
+      "category": "MACRO_CATALYSTS",
+      "critical": false,
+      "status": "EXTERNAL_ONLY",
+      "source": "Official/provider/web research",
+      "notes": "Must preserve publication/availability timestamp."
+    },
+    {
+      "id": "MACRO_EVENTS_GEOPOLITICS",
+      "category": "MACRO_CATALYSTS",
+      "critical": true,
+      "status": "EXTERNAL_ONLY",
+      "source": "Official timestamped web evidence",
+      "notes": "Only evidence available before the historical cutoff may be used."
+    },
+    {
+      "id": "OPTION_LIFECYCLE_PRICES",
+      "category": "OUTCOME_SCORING",
+      "critical": true,
+      "status": "PROBE_REQUIRED",
+      "source": "Expired option historical candles",
+      "notes": "Needed for model entry path, MFE/MAE and objective lifecycle scoring."
+    }
+  ]
+}
