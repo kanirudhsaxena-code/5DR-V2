@@ -27,10 +27,15 @@ class Bt100BackfillPlanTests(unittest.TestCase):
         self.assertEqual(plan["production_neuron_calls"], 0)
         self.assertFalse(plan["trading_enabled"])
         self.assertEqual(len(plan["plan_sha256"]), 64)
-        ids = {row["variable_id"] for row in plan["variables"]}
-        self.assertIn("NIFTY_PRICE_CANDLES", ids)
-        self.assertIn("INDIA_VIX", ids)
-        self.assertIn("GLOBAL_RISK_INDICES", ids)
+        by_id = {row["variable_id"]: row for row in plan["variables"]}
+        self.assertIn("NIFTY_PRICE_CANDLES", by_id)
+        self.assertIn("INDIA_VIX", by_id)
+        self.assertIn("GLOBAL_RISK_INDICES", by_id)
+        nifty = by_id["NIFTY_PRICE_CANDLES"]
+        by_tf = {row["timeframe"]: row for row in nifty["timeframes"]}
+        self.assertEqual(by_tf["5m"]["desired_end"], plan["last_outcome_date"])
+        self.assertLess(by_tf["5m"]["desired_start"], plan["first_target_date"])
+        self.assertGreater(len(by_tf["5m"]["chunks"]), 1)
 
     def test_plan_requires_exact_100_sessions(self):
         doc = self.target_doc()
