@@ -34,10 +34,12 @@ class Bt100ReadinessTests(unittest.TestCase):
         with self.assertRaises(ReadinessError):
             validate_config(config)
 
-    def test_formal_run_stays_blocked_before_g5(self):
+    def test_formal_run_stays_blocked_until_data_certified(self):
         report = build_report(self.config, self.evidence)
         self.assertFalse(report["formal_replay_ready"])
-        self.assertFalse(report["g5_1_passed"])
+        self.assertTrue(report["g5_1_passed"])
+        self.assertTrue(report["baseline_frozen"])
+        self.assertFalse(report["target_dates_valid"])
         self.assertEqual(report["phase"], "READINESS_IN_PROGRESS")
 
     def test_exactly_100_unique_target_dates_required(self):
