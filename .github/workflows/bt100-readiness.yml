@@ -64,6 +64,9 @@ jobs:
         id: expired_probe
         continue-on-error: true
         run: python -m bt100.upstox_expired_probe > .bt100/upstox_expired_probe.json
+      - name: Surface sanitized expired-probe diagnostic
+        if: always()
+        run: cat .bt100/upstox_expired_probe.json
       - name: Build readiness certificate V0
         if: always()
         continue-on-error: true
@@ -91,6 +94,7 @@ jobs:
           path: .bt100/*.json
           if-no-files-found: error
           retention-days: 30
+          include-hidden-files: true
 
       - name: Enforce live derivative readiness
         if: always()
