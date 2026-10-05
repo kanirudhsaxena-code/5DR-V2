@@ -1,0 +1,42 @@
+{
+  "schema": "bt100-frozen-experiment-contract-v1",
+  "batch_id": "BT-5DR-100-V1",
+  "status": "BASELINE_FROZEN_DATA_CERTIFICATION_PENDING",
+  "observation_class": "REPLAY",
+  "official_efficacy_eligible": false,
+  "baseline": {
+    "repository": "kanirudhsaxena-code/5DR-V2",
+    "sha": "fe7254df67f898e78f23a55fc30e366abf596853",
+    "model_version": "5DR_V2_1",
+    "output_contract_version": "5DR_V2_1_2",
+    "canonical_spec_version": "5DR V2.2.3",
+    "canonical_spec_sha256_lf": "c0aaad1e965cecd7c383bbcecc7852b7b3fdeee45414f7d06e53f07d756fa9aa"
+  },
+  "closure": {
+    "edge_console_sha": "575ac13892ec4f53cb88e1a414816d9e4c705f03",
+    "g5_1_closure_proof_run_id": 37351718169,
+    "conclusion": "success"
+  },
+  "cohort": {
+    "target_session_count": 100,
+    "target_selection_rule": "100 unique NIFTY trading sessions with complete D+1..D+5 maturity; exact manifest frozen from authenticated NIFTY daily history",
+    "exact_target_manifest_state": "PENDING_READINESS_ARTIFACT"
+  },
+  "horizons": [
+    "D+1",
+    "D+2",
+    "D+3",
+    "D+4",
+    "D+5"
+  ],
+  "safety": {
+    "production_neuron_budget": 0,
+    "production_writes_allowed": false,
+    "canonical_table_writes_allowed": false,
+    "trading_allowed": false,
+    "methodology_tuning_allowed": false,
+    "missing_evidence_policy": "DATA_GAP_OR_NOT_SCORABLE",
+    "anti_leakage_policy": "POINT_IN_TIME_FAIL_CLOSED"
+  },
+  "mutation_rule": "Any change to methodology, target cohort, evidence after freeze, or scoring definitions requires a new version; BT-5DR-100-V1 is never silently rewritten."
+}
