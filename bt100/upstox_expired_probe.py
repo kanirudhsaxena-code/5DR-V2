@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import date, timedelta
+from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
@@ -140,10 +141,22 @@ def main():
         print(json.dumps(run(os.environ.get("UPSTOX_ANALYTICS_TOKEN", "")), sort_keys=True, indent=2))
         return 0
     except Exception as error:
+        diagnostic = {}
+        if isinstance(error, HTTPError):
+            diagnostic["http_status"] = error.code
+            try:
+                body = json.loads(error.read().decode("utf-8"))
+                errors = body.get("errors") if isinstance(body, dict) else None
+                if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+                    diagnostic["provider_code"] = errors[0].get("errorCode") or errors[0].get("error_code")
+                    diagnostic["provider_message"] = errors[0].get("message")
+            except Exception:
+                pass
         print(json.dumps({
             "schema": "bt100-upstox-expired-probe-v0",
             "status": "BLOCKED",
             "error_type": type(error).__name__,
+            **diagnostic,
             "request_budget": REQUEST_BUDGET,
             "read_only": True,
             "production_writes": 0,
