@@ -1,0 +1,87 @@
+name: BT100 readiness (isolated read-only)
+
+on:
+  push:
+    branches:
+      - bt100-readiness-v0-20261005
+    paths:
+      - 'bt100/**'
+      - 'tests/test_bt100_*.py'
+      - '.github/workflows/bt100-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bt100-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: BT100 fail-closed unit tests
+        run: python -m unittest tests.test_bt100_readiness -v
+      - name: Static readiness report
+        run: python -m bt100.readiness --output .bt100/readiness-static.json
+      - name: Assert static report has zero production-neuron budget
+        run: |
+          python - <<'PY'
+          import json
+          report=json.load(open('.bt100/readiness-static.json'))
+          assert report['production_neuron_budget'] == 0
+          assert report['production_writes_allowed'] is False
+          assert report['trading_allowed'] is False
+          assert report['formal_replay_ready'] is False
+          PY
+
+  live_readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: unit
+    env:
+      UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare artifact directory
+        run: mkdir -p .bt100
+      - name: Select 100 independent matured target sessions
+        run: python -m bt100.select_target_dates > .bt100/target_dates.json
+      - name: Probe expired derivative entitlement and OI
+        run: python -m bt100.upstox_expired_probe > .bt100/upstox_expired_probe.json
+      - name: Build readiness certificate V0
+        run: |
+          python -m bt100.readiness \
+            --target-dates .bt100/target_dates.json \
+            --probe .bt100/upstox_expired_probe.json \
+            --output .bt100/readiness-v0.json
+      - name: Prove zero production inference/write declarations
+        run: |
+          python - <<'PY'
+          import json
+          for path in ('.bt100/target_dates.json','.bt100/upstox_expired_probe.json'):
+              obj=json.load(open(path))
+              assert obj.get('production_neuron_calls',0) == 0
+              assert obj.get('production_writes',0) == 0
+              assert obj.get('trading_enabled',False) is False
+          PY
+      - name: Upload bounded readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bt100-readiness-v0
+          path: .bt100/*.json
+          if-no-files-found: error
+          retention-days: 30
