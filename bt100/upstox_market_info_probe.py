@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 
 BASE = "https://api.upstox.com/v2"
 NIFTY = "NSE_INDEX|Nifty 50"
-PROBE_DATE = "2026-10-01"
+PROBE_DATE = "2026-05-07"
 REQUEST_BUDGET = 2
 
 
@@ -50,7 +50,7 @@ def run(token):
 
     oi = _get(token, "/market/oi", {
         "instrument_key": NIFTY,
-        "expiry": "current_month",
+        "expiry": "2026-05-29",
         "date": PROBE_DATE,
     })
     oi_rows = oi.get("data", {}).get("call_put_oi_data_list")
@@ -71,7 +71,7 @@ def run(token):
         "schema": "bt100-upstox-market-info-probe-v0",
         "status": "PASSED",
         "probe_date": PROBE_DATE,
-        "expiry_selector": "current_month",
+        "expiry_selector": "2026-05-29",
         "oi_rows": len(oi_rows),
         "change_oi_rows": len(change_rows),
         "request_budget": REQUEST_BUDGET,
