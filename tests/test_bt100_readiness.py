@@ -40,6 +40,7 @@ class Bt100ReadinessTests(unittest.TestCase):
         self.assertTrue(report["g5_1_passed"])
         self.assertTrue(report["baseline_frozen"])
         self.assertFalse(report["target_dates_valid"])
+        self.assertGreater(len(report["formal_evidence_blockers"]), 0)
         self.assertEqual(report["phase"], "READINESS_IN_PROGRESS")
 
     def test_exactly_100_unique_target_dates_required(self):
