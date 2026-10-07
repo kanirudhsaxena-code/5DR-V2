@@ -1,0 +1,67 @@
+name: Build 3 5DR Historical Replay
+
+on:
+  push:
+    branches:
+      - build-3.0-accuracy-loop-20261006
+    paths:
+      - 'src/build3_historical_replay.py'
+      - '.github/workflows/build3-historical-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build3-5dr-historical-replay
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only database client
+        run: python -m pip install --disable-pip-version-check 'psycopg2-binary>=2.9,<3'
+      - name: Run authoritative read-only 5DR historical replay
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          python src/build3_historical_replay.py
+      - name: Validate replay accounting and safety
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('build3-5dr-historical-replay.json'))
+          assert d.get('version')=='MDOS_BUILD_3_5DR_HISTORICAL_REPLAY_V1',d
+          assert d.get('mode')=='READ_ONLY_HISTORICAL_ACCEPTANCE',d
+          i=d.get('integrity') or {}
+          assert i.get('historical_records_mutated') is False,i
+          assert i.get('writes_performed')==0,i
+          assert i.get('reconstructed_core_enters_official_efficacy') is False,i
+          a=d.get('acceptance') or {}
+          assert a.get('source_population_accounted') is True,a
+          assert a.get('official_vs_shadow_separated') is True,a
+          p=d.get('source_population') or {}
+          assert int(p.get('valid_forecasts') or 0)>0,p
+          assert int(p.get('horizon_rows') or 0)>0,p
+          assert int(d.get('accounted_forecasts') or 0)==int(p.get('valid_forecasts') or -1),d
+          print('BUILD3_5DR_HISTORICAL_REPLAY=PASS')
+          print('POPULATION',p)
+          print('NATIVE',d.get('native_forecast_efficacy'))
+          print('RECOMMENDATIONS',d.get('recommendations'))
+          print('EXCLUSIONS',d.get('exclusions'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build3-5dr-historical-replay
+          path: build3-5dr-historical-replay.json
+          retention-days: 30
+          if-no-files-found: error
