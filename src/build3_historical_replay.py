@@ -101,9 +101,21 @@ def main():
         headers=cur.fetchall()
 
         cur.execute("""
+          select count(*)
+            from information_schema.columns
+           where table_schema='public' and table_name='daily_forecasts'
+             and column_name in ('bull_probability','range_probability','bear_probability')
+        """)
+        has_daily_scenarios=int(cur.fetchone()['count'])==3
+        scenario_select=(
+            "d.bull_probability,d.range_probability,d.bear_probability"
+            if has_daily_scenarios else
+            "NULL::numeric as bull_probability,NULL::numeric as range_probability,NULL::numeric as bear_probability"
+        )
+        cur.execute(f"""
           select f.forecast_id,f.run_timestamp,f.spot_price,f.model_version,f.regime,f.recommendation,
                  d.day_number,d.trading_date,d.bias,d.probability,d.zone_low,d.zone_high,
-                 d.bull_probability,d.range_probability,d.bear_probability,
+                 {scenario_select},
                  oc.actual_nifty,oc.period_high,oc.period_low,oc.source_ref
             from forecasts f
             join daily_forecasts d on d.forecast_id=f.forecast_id
