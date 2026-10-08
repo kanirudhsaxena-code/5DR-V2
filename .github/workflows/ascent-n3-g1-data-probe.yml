@@ -7,6 +7,7 @@ on:
       - '.github/workflows/ascent-n3-g1-data-probe.yml'
       - 'experiments/ascent_n3_g1_probe.py'
       - 'experiments/ascent_n3_g1_freshness.py'
+      - 'experiments/ascent_n3_g1_depth.py'
       - 'tests/test_ascent_n3_g1_probe.py'
       - 'tests/test_ascent_n3_g1_freshness.py'
   workflow_dispatch:
@@ -38,6 +39,11 @@ jobs:
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.ascent_n3_g1_freshness
+      - name: Optional option-chain and older-expiry retention diagnostics
+        if: always()
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.ascent_n3_g1_depth
       - name: Retain sanitized evidence on failure or success
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -46,5 +52,6 @@ jobs:
           path: |
             .g1/evidence.json
             .g1/freshness.json
+            .g1/depth-retention.json
           retention-days: 30
           if-no-files-found: warn
