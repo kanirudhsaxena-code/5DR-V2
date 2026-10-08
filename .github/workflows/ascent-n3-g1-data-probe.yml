@@ -8,6 +8,7 @@ on:
       - 'experiments/ascent_n3_g1_probe.py'
       - 'experiments/ascent_n3_g1_freshness.py'
       - 'experiments/ascent_n3_g1_depth.py'
+      - 'experiments/ascent_n3_g1_macro_news.py'
       - 'tests/test_ascent_n3_g1_probe.py'
       - 'tests/test_ascent_n3_g1_freshness.py'
   workflow_dispatch:
@@ -44,6 +45,11 @@ jobs:
         env:
           UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: python -m experiments.ascent_n3_g1_depth
+      - name: Read-only public macro and news availability diagnostic
+        if: always()
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.ascent_n3_g1_macro_news
       - name: Retain sanitized evidence on failure or success
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -53,5 +59,6 @@ jobs:
             .g1/evidence.json
             .g1/freshness.json
             .g1/depth-retention.json
+            .g1/upstox-macro-news.json
           retention-days: 30
           if-no-files-found: warn
