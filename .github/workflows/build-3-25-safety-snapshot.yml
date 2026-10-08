@@ -33,7 +33,7 @@ jobs:
             -t public.assessment_snapshots \
             -t public.canonical_selections \
             -t public.forecast_governance \
-            -f build-3-25-5dr-safety.dump
+            -f /work/build-3-25-5dr-safety.dump
           psql "$DATABASE_URL" -At -F ',' -c "
             select 'forecasts',count(*) from forecasts union all
             select 'daily_forecasts',count(*) from daily_forecasts union all
