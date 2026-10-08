@@ -54,67 +54,39 @@ try:
             }
 
         cur.execute("""
-            WITH canon AS (
-              SELECT e.*
-              FROM v_latest_forecast_checkpoint_evaluation e
-              JOIN canonical_selections c
-                ON c.selected_forecast_id=e.forecast_id
-               AND c.selection_status='SELECTED'
-            )
             SELECT day_number,
-                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE') AS scorable,
-                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit) AS hits,
-                   COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit) AS zone_hits,
-                   ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND directional_hit)
-                         /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS hit_rate_pct,
-                   ROUND(100.0*COUNT(*) FILTER (WHERE evaluation_status='SCORABLE' AND zone_hit)
-                         /NULLIF(COUNT(*) FILTER (WHERE evaluation_status='SCORABLE'),0),2) AS zone_hit_rate_pct,
-                   ROUND(AVG(directional_margin_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_margin,
-                   ROUND(AVG(zone_error_points) FILTER (WHERE evaluation_status='SCORABLE'),2) AS avg_zone_error,
+                   COUNT(*) AS scorable,
+                   COUNT(*) FILTER (WHERE directional_hit) AS hits,
+                   COUNT(*) FILTER (WHERE zone_hit) AS zone_hits,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE directional_hit)/NULLIF(COUNT(*),0),2) AS hit_rate_pct,
+                   ROUND(100.0*COUNT(*) FILTER (WHERE zone_hit)/NULLIF(COUNT(*),0),2) AS zone_hit_rate_pct,
+                   ROUND(AVG(directional_margin_points),2) AS avg_margin,
+                   ROUND(AVG(zone_error_points),2) AS avg_zone_error,
                    MAX(evaluated_at) AS last_evaluated_at
-            FROM canon
-            GROUP BY day_number
-            ORDER BY day_number
+              FROM v_official_5dr_efficacy_population
+             GROUP BY day_number
+             ORDER BY day_number
         """)
         horizon_rows = cur.fetchall()
 
         cur.execute("""
-            SELECT CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER) AS day_number,
-                   COUNT(*) AS eligible_matured
-              FROM outcome_checkpoints oc
-              JOIN canonical_selections cs
-                ON cs.selected_forecast_id=oc.forecast_id
-               AND cs.selection_status='SELECTED'
-             WHERE oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')
-               AND (
-                 oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-                 OR (
-                   oc.due_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-                   AND (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::time >= time '15:40'
-                 )
-               )
-             GROUP BY CAST(SUBSTRING(oc.checkpoint_type FROM 3) AS INTEGER)
+            SELECT day_number,COUNT(*) AS eligible_matured
+              FROM v_build_3_25_nifty_checkpoint_population
+             WHERE population_state IN ('OFFICIAL_SCORABLE','REPAIR_PENDING')
+             GROUP BY day_number
              ORDER BY day_number
         """)
         eligible_rows = cur.fetchall()
         eligible_by_day = {int(day): int(count or 0) for day,count in eligible_rows}
 
         cur.execute("""
-            WITH canon AS (
-              SELECT e.*
-              FROM v_latest_forecast_checkpoint_evaluation e
-              JOIN canonical_selections c
-                ON c.selected_forecast_id=e.forecast_id
-               AND c.selection_status='SELECTED'
-              WHERE e.evaluation_status='SCORABLE'
-            )
             SELECT COUNT(*) AS scorable,
                    COUNT(*) FILTER (WHERE directional_hit) AS hits,
                    COUNT(*) FILTER (WHERE zone_hit) AS zone_hits,
                    ROUND(100.0*COUNT(*) FILTER (WHERE directional_hit)/NULLIF(COUNT(*),0),2) AS accuracy,
                    ROUND(100.0*COUNT(*) FILTER (WHERE zone_hit)/NULLIF(COUNT(*),0),2) AS zone_accuracy,
                    MAX(evaluated_at) AS assessed_at
-            FROM canon
+              FROM v_official_5dr_efficacy_population
         """)
         scorable, directional_hits, zone_hits, accuracy, zone_accuracy, forecast_assessed_at = cur.fetchone()
         if forecast_assessed_at is None:
@@ -123,33 +95,24 @@ try:
 
         cur.execute("""
             SELECT COUNT(*)
-            FROM outcome_checkpoints oc
-            JOIN canonical_selections c
-              ON c.selected_forecast_id=oc.forecast_id
-             AND c.selection_status='SELECTED'
-            WHERE oc.status='DUE'
-              AND oc.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+              FROM v_build_3_25_nifty_checkpoint_population
+             WHERE population_state='REPAIR_PENDING'
         """)
         overdue = int(cur.fetchone()[0] or 0)
 
         cur.execute("""
-            WITH selected AS (
-              SELECT selected_forecast_id AS forecast_id
-              FROM canonical_selections
-              WHERE selection_status='SELECTED' AND selected_forecast_id IS NOT NULL
-            ),
-            counts AS (
-              SELECT s.forecast_id,
-                     (SELECT COUNT(*) FROM daily_forecasts df WHERE df.forecast_id=s.forecast_id) AS daily_count,
-                     (SELECT COUNT(*) FROM outcome_checkpoints oc
-                        WHERE oc.forecast_id=s.forecast_id
-                          AND oc.checkpoint_type IN ('D+1','D+2','D+3','D+4','D+5')) AS checkpoint_count
-              FROM selected s
-            )
-            SELECT COUNT(*) FILTER (WHERE daily_count<5 OR checkpoint_count<5)
-            FROM counts
+            SELECT COUNT(DISTINCT forecast_id)
+              FROM v_build_3_25_nifty_checkpoint_population
+             WHERE population_state='AUDIT_ONLY_INCOMPLETE'
         """)
         integrity_incomplete = int(cur.fetchone()[0] or 0)
+
+        cur.execute("""
+            SELECT COUNT(*)
+              FROM v_build_3_25_nifty_checkpoint_population
+             WHERE population_state='AUDIT_ONLY_INCOMPLETE'
+        """)
+        audit_exclusion_count = int(cur.fetchone()[0] or 0)
 
         cur.execute("""
             WITH selected AS (
@@ -410,6 +373,8 @@ if overdue:
     headline += f"; {overdue} overdue checkpoints still pending reconciliation"
 if integrity_incomplete:
     headline += f"; {integrity_incomplete} canonical forecast(s) have incomplete frozen persistence"
+if audit_exclusion_count:
+    headline += f"; {audit_exclusion_count} legacy checkpoint(s) excluded from official efficacy for incomplete frozen path"
 
 overall = {
     "headline": headline,
@@ -424,7 +389,8 @@ overall = {
     "zone_hit_rate_pct": float(zone_accuracy) if zone_accuracy is not None else None,
     "pending_due_checkpoints": overdue,
     "persistence_integrity_incomplete_forecasts": integrity_incomplete,
-    "population_rule": "SELECTED_DAILY_CANONICAL_ONLY",
+    "audit_exclusion_checkpoints": audit_exclusion_count,
+    "population_rule": "BUILD_3_25_CLEAN_SELECTED_CANONICAL_PATH_ONLY",
 }
 
 metrics = {
