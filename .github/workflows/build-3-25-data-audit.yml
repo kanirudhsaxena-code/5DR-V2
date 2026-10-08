@@ -50,7 +50,9 @@ jobs:
           print('OFFICIAL_SCORABLE',summary['official_scorable'])
           print('CLASSIFICATIONS',summary['classification_counts'])
           PY
-      - name: Emit bounded audit report\n        run: cat build-3-25-5dr-data-audit.json\n      - uses: actions/upload-artifact@v4
+      - name: Emit bounded audit report
+        run: cat build-3-25-5dr-data-audit.json
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: build-3-25-5dr-data-audit
