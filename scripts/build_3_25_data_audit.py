@@ -97,10 +97,12 @@ def matured(due_date):
 
 forecast_inventory=[]
 for target_date,forecast_id,daily_count,checkpoint_count,complete,model_version,output_version in forecast_rows:
-    if int(daily_count or 0) < 5 or int(checkpoint_count or 0) < 5 or complete != "COMPLETE":
+    # Build 3.25 efficacy eligibility is based on immutable issuance/path
+    # completeness, not on a later presentation/assessment snapshot.
+    if int(daily_count or 0) != 5 or int(checkpoint_count or 0) != 5:
         classification="AUDIT_ONLY_INCOMPLETE"
     else:
-        classification="CANONICAL_COMPLETE"
+        classification="CANONICAL_PATH_COMPLETE"
     forecast_inventory.append({
         "target_trading_date":target_date.isoformat(),
         "forecast_id":forecast_id,
@@ -121,7 +123,7 @@ for row in checkpoint_rows:
     is_matured=matured(due_date)
     if not is_matured:
         classification="NOT_DUE"
-    elif int(daily_count or 0) < 5 or int(checkpoint_count or 0) < 5 or complete != "COMPLETE":
+    elif int(daily_count or 0) != 5 or int(checkpoint_count or 0) != 5:
         classification="AUDIT_ONLY_INCOMPLETE"
     elif evaluation_status == "SCORABLE":
         classification="OFFICIAL_SCORABLE"
