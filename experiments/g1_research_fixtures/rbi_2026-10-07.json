@@ -1,0 +1,61 @@
+{
+  "schema": "ascent-n3-g1-research-fixture-v1",
+  "test_case": "RBI_2026_10_07_MPC",
+  "universe": "NIFTY_50",
+  "as_of_ist_date": "2026-10-08",
+  "origin": "Exa app discovery and retrieval in ChatGPT conversation; human-supervised ChatGPT reasoning; NOT unattended Exa API inside runner",
+  "source": {
+    "authority": "Reserve Bank of India",
+    "type": "OFFICIAL_PRIMARY",
+    "url": "https://www.rbi.org.in/scripts/BS_PressReleaseDisplay.aspx?prid=63742",
+    "published_date": "2026-10-07",
+    "event_date": "2026-10-07",
+    "date_precision": "DATE_ONLY",
+    "verification": "PRIMARY_RELEASE_READ"
+  },
+  "cross_checks": [
+    {
+      "url": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=63744",
+      "authority": "Reserve Bank of India",
+      "published_date": "2026-10-07",
+      "conclusion": "CONFIRMS_POLICY_CHANGE"
+    },
+    {
+      "url": "https://www.thehindubusinessline.com/markets/nifty-hits-52-week-low-as-crude-fii-selling-weigh/article71559983.ece",
+      "authority": "The Hindu BusinessLine",
+      "published_date": "2026-10-08",
+      "conclusion": "CONFIRMS_REPORTED_MARKET_CONTEXT"
+    }
+  ],
+  "extracted_fact": {
+    "event_type": "MONETARY_POLICY_DECISION",
+    "repo_rate_before_percent": 5.25,
+    "repo_rate_after_percent": 5.5,
+    "rate_increase_basis_points": 25,
+    "stance_after": "CALIBRATED_TIGHTENING",
+    "vote": "UNANIMOUS"
+  },
+  "chatgpt_analysis": {
+    "fact_confidence": "HIGH_PRIMARY_SOURCE",
+    "nifty_relevance": "MATERIAL_DOMESTIC_MACRO_CATALYST",
+    "directional_claim": "NO_DETERMINISTIC_NIFTY_DIRECTION",
+    "transmission_channels": [
+      "domestic borrowing cost",
+      "rate-sensitive valuations",
+      "INR and capital-flow expectations"
+    ],
+    "counter_case": "Indian growth remains resilient; oil, global yields and foreign flows confound attribution. News outlets disagree on whether hike was a surprise.",
+    "reliability": "Facts primary-verified; impact is a qualified interpretation, not a scored probability",
+    "historical_backtest_guard": "Only use publication and information available by Oct 8; date-only source timestamps may not be placed at precise intraday cutoffs"
+  },
+  "safety": {
+    "recommendation_released": false,
+    "trade_execution": false,
+    "production_forecast_written": false
+  },
+  "limitations": [
+    "This is an Exa-to-ChatGPT-to-fixture MANUAL bridge, not an unattended Exa API execution.",
+    "No raw fetched RBI HTML SHA is claimed; hash will cover the validated structured record only.",
+    "Live economic release ingestion and database engine ACK require independent testing."
+  ]
+}
