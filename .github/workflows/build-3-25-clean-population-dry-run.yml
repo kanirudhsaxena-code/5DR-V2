@@ -1,0 +1,50 @@
+name: Build 3.25 5DR Clean Population Dry Run
+
+on:
+  push:
+    branches: [build-3.25-data-integrity-20261008]
+    paths:
+      - 'migrations/010_build_3_25_clean_efficacy_population.sql'
+      - '.github/workflows/build-3-25-clean-population-dry-run.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare PostgreSQL 17 client
+        run: docker pull postgres:17
+      - name: Apply migration inside rollback-only transaction
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          {
+            echo 'begin;'
+            cat migrations/010_build_3_25_clean_efficacy_population.sql
+            echo "\\copy (select raw_matured_count,eligible_matured_count,official_scorable_count,repair_pending_count,audit_exclusion_count,official_coverage_pct from v_build_3_25_5dr_population_summary) to stdout with csv"
+            echo 'rollback;'
+          } | docker run -i --rm postgres:17 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 > /tmp/tx.log
+          grep -E '^[0-9]+,' /tmp/tx.log | tail -1 > /tmp/summary.csv
+          cat /tmp/summary.csv
+      - name: Validate expected population
+        run: |
+          python - <<'PY'
+          import sys
+          line=open('/tmp/summary.csv').read().strip().split(',')
+          assert len(line)==6,line
+          raw,eligible,scorable,repair,audit,coverage=line
+          assert int(raw)==45,(raw,line)
+          assert int(eligible)==35,(eligible,line)
+          assert int(scorable)==35,(scorable,line)
+          assert int(repair)==0,(repair,line)
+          assert int(audit)==10,(audit,line)
+          assert float(coverage)==100.0,(coverage,line)
+          print('BUILD_3_25_5DR_CLEAN_POPULATION_DRY_RUN=PASS')
+          PY
