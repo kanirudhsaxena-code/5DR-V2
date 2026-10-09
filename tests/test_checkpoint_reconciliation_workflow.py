@@ -22,7 +22,9 @@ def test_lifecycle_workflow_reconciles_due_checkpoints_from_authenticated_upstox
 
 def test_lifecycle_workflow_publishes_live_canonical_rollup_not_stale_snapshot_forecast_metrics():
     text = builder_text()
-    assert "v_latest_forecast_checkpoint_evaluation" in text
+    assert "v_official_5dr_efficacy_population" in text
+    assert "v_build_3_25_nifty_checkpoint_population" in text
+    assert "population_state=\u0027REPAIR_PENDING\u0027" in text
     assert "canonical_scorable_checkpoints" in text
     assert "pending_due_checkpoints" in text
     assert "persistence_integrity_incomplete_forecasts" in text
