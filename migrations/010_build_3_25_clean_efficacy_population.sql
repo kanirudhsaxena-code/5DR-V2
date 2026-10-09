@@ -115,8 +115,10 @@ select
 from public.v_build_3_25_nifty_checkpoint_population;
 
 insert into public.change_log(model_version,schema_version,change_type,description,rationale)
-values(
-  '5DR_V2_1',5,'AMENDMENT',
-  'Build 3.25 clean efficacy population views: official eligible/scorable checkpoints are separated from repair-pending and audit-only incomplete legacy rows.',
-  'Remove persistence-incomplete legacy observations from official efficacy without deleting or rewriting immutable forecasts, while disclosing audit exclusions and coverage.'
+select '5DR_V2_1',5,'AMENDMENT',
+       'Build 3.25 clean efficacy population views: official eligible/scorable checkpoints are separated from repair-pending and audit-only incomplete legacy rows.',
+       'Remove persistence-incomplete legacy observations from official efficacy without deleting or rewriting immutable forecasts, while disclosing audit exclusions and coverage.'
+where not exists (
+  select 1 from public.change_log
+   where description='Build 3.25 clean efficacy population views: official eligible/scorable checkpoints are separated from repair-pending and audit-only incomplete legacy rows.'
 );
