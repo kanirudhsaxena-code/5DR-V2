@@ -1,4 +1,4 @@
-"""One-shot authenticated Upstox live snapshot for the user's 30-stock PMS holdings."""
+"""One-shot authenticated Upstox live snapshot for the user's 29-stock PMS holdings."""
 import json, os, subprocess
 from urllib.parse import urlencode
 from experiments.upstox_catalog import PublicInstrumentCatalog
@@ -26,9 +26,8 @@ HOLDINGS={
 "STRTECH":{"symbol":"STLTECH","qty":449,"close22":1016.8,"cost":292327.19},
 "SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
 "SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
-"WINDLAS":{"symbol":"WINDLAS","qty":157,"close22":1082.4,"cost":172800.69},
 "WOCKPHARMA":{"symbol":"WOCKPHARMA","qty":86,"close22":2083.9,"cost":173915.52},
-"MEESHO":{"symbol":"MEESHO","qty":757,"close22":218.69,"cost":148085.80},
+"MEESHO":{"symbol":"MEESHO","qty":1020,"close22":232.6,"cost":209836.76},
 "SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
 "KANOHAR":{"symbol":"KANOHAR","qty":125,"close22":1091.05,"cost":102666.11},
 "TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":792.15,"cost":181815.08},
@@ -36,7 +35,7 @@ HOLDINGS={
 "VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=93740.61
+PMS_RESIDUAL=186373.77
 
 
 def main():
