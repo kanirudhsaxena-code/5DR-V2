@@ -27,7 +27,7 @@ HOLDINGS={
 "SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
 "SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
 "WOCKPHARMA":{"symbol":"WOCKPHARMA","qty":86,"close22":2083.9,"cost":173915.52},
-"MEESHO":{"symbol":"MEESHO","qty":1020,"close22":232.6,"cost":209836.76},
+"MEESHO":{"symbol":"MEESHO","qty":1022,"close22":232.6,"cost":209836.76},
 "SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
 "KANOHAR":{"symbol":"KANOHAR","qty":125,"close22":1091.05,"cost":102666.11},
 "TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":792.15,"cost":181815.08},
