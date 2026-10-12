@@ -1,32 +1,22 @@
-"""One-shot authenticated Upstox live snapshot for the user's 29-stock PMS holdings."""
+"""One-shot authenticated Upstox live snapshot for the user's 19-stock PMS holdings."""
 import json, os, subprocess
 from urllib.parse import urlencode
 from experiments.upstox_catalog import PublicInstrumentCatalog
 
 HOLDINGS={
-"APOLLO":{"symbol":"APOLLO","qty":281,"close22":394.0,"cost":117583.78},
-"BEPL":{"symbol":"BEPL","qty":1806,"close22":123.76,"cost":237102.11},
-"CEIGALL":{"symbol":"CEIGALL","qty":763,"close22":380.1,"cost":289543.09},
 "EBGNG":{"symbol":"EBGNG","qty":668,"close22":704.7,"cost":425206.72},
-"GLS":{"symbol":"ALIVUS","qty":80,"close22":1374.2,"cost":115930.57},
-"INDGN":{"symbol":"INDGN","qty":420,"close22":593.5,"cost":240814.38},
-"IOLCP":{"symbol":"IOLCP","qty":853,"close22":209.39,"cost":141916.00},
-"JYOTICNC":{"symbol":"JYOTICNC","qty":279,"close22":1032.1,"cost":270242.46},
+"IOLCP":{"symbol":"IOLCP","qty":735,"close22":209.39,"cost":122214.46},
+"JYOTICNC":{"symbol":"JYOTICNC","qty":120,"close22":1032.1,"cost":120040.30},
 "KISSHT":{"symbol":"KISSHT","qty":479,"close22":371.15,"cost":175074.26},
 "KSB":{"symbol":"KSB","qty":181,"close22":806.45,"cost":155429.88},
 "LLOYDSENGG":{"symbol":"LLOYDSENGG","qty":4955,"close22":98.31,"cost":451287.08},
 "OPTIEMUS":{"symbol":"OPTIEMUS","qty":206,"close22":803.7,"cost":123110.72},
-"PINELABS":{"symbol":"PINELABS","qty":1180,"close22":167.59,"cost":199187.88},
 "REDINGTON":{"symbol":"REDINGTON","qty":608,"close22":397.95,"cost":236387.13},
 "ROLEXRINGS":{"symbol":"ROLEXRINGS","qty":937,"close22":196.36,"cost":182922.52},
 "RPEL":{"symbol":"RPEL","qty":55,"close22":1818.9,"cost":54536.50},
-"SMLMAH":{"symbol":"SMLMAH","qty":23,"close22":6251.0,"cost":150484.80},
-"STAR":{"symbol":"STAR","qty":97,"close22":1084.8,"cost":118022.38},
-"STLNETWORK":{"symbol":"STLNETWORK","qty":1229,"close22":49.43,"cost":46806.19},
 "STRTECH":{"symbol":"STLTECH","qty":449,"close22":1016.8,"cost":292327.19},
 "SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
 "SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
-"WOCKPHARMA":{"symbol":"WOCKPHARMA","qty":86,"close22":2083.9,"cost":173915.52},
 "MEESHO":{"symbol":"MEESHO","qty":1022,"close22":232.6,"cost":209836.76},
 "SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
 "KANOHAR":{"symbol":"KANOHAR","qty":125,"close22":1091.05,"cost":102666.11},
@@ -35,7 +25,7 @@ HOLDINGS={
 "VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=186373.77
+PMS_RESIDUAL=1978205.01
 
 
 def main():
