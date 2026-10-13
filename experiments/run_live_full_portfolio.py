@@ -1,4 +1,4 @@
-"""One-shot authenticated Upstox live snapshot for the user's 19-stock PMS holdings."""
+"""One-shot authenticated Upstox live snapshot for the user's 23-stock PMS holdings."""
 import json, os, subprocess
 from urllib.parse import urlencode
 from experiments.upstox_catalog import PublicInstrumentCatalog
@@ -17,7 +17,11 @@ HOLDINGS={
 "STRTECH":{"symbol":"STLTECH","qty":449,"close22":1016.8,"cost":292327.19},
 "SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
 "SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
-"MEESHO":{"symbol":"MEESHO","qty":1022,"close22":232.6,"cost":209836.76},
+"MEESHO":{"symbol":"MEESHO","qty":1156,"close22":232.6,"cost":240933.94},
+"TEMPSENS":{"symbol":"TEMPSENS","qty":201,"close22":591.55,"cost":119568.42},
+"NETWEB":{"symbol":"NETWEB","qty":23,"close22":5001.0,"cost":115430.11},
+"ONWARDTEC":{"symbol":"ONWARDTEC","qty":286,"close22":332.45,"cost":94751.75},
+"TATAELXSI":{"symbol":"TATAELXSI","qty":36,"close22":3257.0,"cost":118226.77},
 "SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
 "KANOHAR":{"symbol":"KANOHAR","qty":125,"close22":1091.05,"cost":102666.11},
 "TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":792.15,"cost":181815.08},
@@ -25,7 +29,7 @@ HOLDINGS={
 "VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=1978205.01
+PMS_RESIDUAL=1500130.76
 
 
 def main():
