@@ -14,10 +14,10 @@ from src.probability import probabilities
 from src.execution import execution_edge, tradeability
 
 SYMBOLS = {
-    "TEMPSENS": {"symbol":"TEMPSENS","catalyst_score":50},
-    "NETWEB": {"symbol":"NETWEB","catalyst_score":50},
-    "ONWARDTEC": {"symbol":"ONWARDTEC","catalyst_score":50},
-    "TATAELXSI": {"symbol":"TATAELXSI","catalyst_score":50},
+    "CGPOWER": {"symbol":"CGPOWER","catalyst_score":82},
+    "REDINGTON": {"symbol":"REDINGTON","catalyst_score":80},
+    "LLOYDSENGG": {"symbol":"LLOYDSENGG","catalyst_score":74},
+    "VBL": {"symbol":"VBL","catalyst_score":70},
 }
 
 def clamp(x,a=-100,b=100): return max(a,min(b,x))
