@@ -1,0 +1,20 @@
+name: PMS 23 Reconcile Probe
+on:
+  push:
+    paths:
+      - '.g11/pms23_reconcile_request.txt'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reconcile 12 Oct 23-stock PMS snapshot
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.reconcile_pms23_probe
