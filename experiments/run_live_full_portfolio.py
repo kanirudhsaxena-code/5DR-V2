@@ -5,23 +5,23 @@ from experiments.upstox_catalog import PublicInstrumentCatalog
 
 HOLDINGS={
 "EBGNG":{"symbol":"EBGNG","qty":668,"close22":704.7,"cost":425206.72},
-"IOLCP":{"symbol":"IOLCP","qty":735,"close22":209.39,"cost":122214.46},
 "JYOTICNC":{"symbol":"JYOTICNC","qty":120,"close22":1032.1,"cost":120040.30},
 "KISSHT":{"symbol":"KISSHT","qty":479,"close22":371.15,"cost":175074.26},
 "KSB":{"symbol":"KSB","qty":181,"close22":806.45,"cost":155429.88},
 "LLOYDSENGG":{"symbol":"LLOYDSENGG","qty":4955,"close22":98.31,"cost":451287.08},
-"OPTIEMUS":{"symbol":"OPTIEMUS","qty":206,"close22":803.7,"cost":123110.72},
+"NEWGEN":{"symbol":"NEWGEN","qty":257,"close22":466.1,"cost":119488.00},
+"INOXGREEN":{"symbol":"INOXGREEN","qty":958,"close22":123.2,"cost":119484.92},
 "REDINGTON":{"symbol":"REDINGTON","qty":608,"close22":397.95,"cost":236387.13},
 "ROLEXRINGS":{"symbol":"ROLEXRINGS","qty":937,"close22":196.36,"cost":182922.52},
 "RPEL":{"symbol":"RPEL","qty":55,"close22":1818.9,"cost":54536.50},
-"STRTECH":{"symbol":"STLTECH","qty":449,"close22":1016.8,"cost":292327.19},
+"STRTECH":{"symbol":"STLTECH","qty":515,"close22":1014.15,"cost":356332.54},
 "SWANDEF":{"symbol":"SWANDEF","qty":27,"close22":2718.2,"cost":72726.61},
 "SYNCOMF":{"symbol":"SYNCOMF","qty":6766,"close22":23.96,"cost":173020.14},
 "MEESHO":{"symbol":"MEESHO","qty":1156,"close22":232.6,"cost":240933.94},
-"TEMPSENS":{"symbol":"TEMPSENS","qty":201,"close22":591.55,"cost":119568.42},
-"NETWEB":{"symbol":"NETWEB","qty":23,"close22":5001.0,"cost":115430.11},
+"TEMPSENS":{"symbol":"TEMPSENS","qty":399,"close22":591.55,"cost":240606.97},
+"NETWEB":{"symbol":"NETWEB","qty":34,"close22":5001.0,"cost":171065.52},
 "ONWARDTEC":{"symbol":"ONWARDTEC","qty":286,"close22":332.45,"cost":94751.75},
-"TATAELXSI":{"symbol":"TATAELXSI","qty":36,"close22":3257.0,"cost":118226.77},
+"TATAELXSI":{"symbol":"TATAELXSI","qty":53,"close22":3257.0,"cost":176415.33},
 "SONACOMS":{"symbol":"SONACOMS","qty":208,"close22":805.0,"cost":169840.60},
 "KANOHAR":{"symbol":"KANOHAR","qty":125,"close22":1091.05,"cost":102666.11},
 "TDPOWERSYS":{"symbol":"TDPOWERSYS","qty":225,"close22":792.15,"cost":181815.08},
@@ -29,7 +29,7 @@ HOLDINGS={
 "VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=1500130.76
+PMS_RESIDUAL=1254388.82
 
 
 def main():
