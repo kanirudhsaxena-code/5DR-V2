@@ -4,7 +4,8 @@ from urllib.parse import urlencode
 from experiments.upstox_catalog import PublicInstrumentCatalog
 
 HOLDINGS={
-"EBGNG":{"symbol":"EBGNG","qty":668,"close22":704.7,"cost":425206.72},
+"EBGNG":{"symbol":"EBGNG","qty":847,"close22":729.4,"cost":557619.01},
+"JAYNECOIND":{"symbol":"JAYNECOIND","qty":1,"close22":0,"cost":178604.29},
 "JYOTICNC":{"symbol":"JYOTICNC","qty":120,"close22":1032.1,"cost":120040.30},
 "KISSHT":{"symbol":"KISSHT","qty":479,"close22":371.15,"cost":175074.26},
 "KSB":{"symbol":"KSB","qty":181,"close22":806.45,"cost":155429.88},
@@ -29,7 +30,7 @@ HOLDINGS={
 "VBL":{"symbol":"VBL","qty":564,"close22":425.3,"cost":238134.61}
 }
 PMS_NET_INVESTED=5050384.22
-PMS_RESIDUAL=1254388.82
+PMS_RESIDUAL=943372.29
 
 
 def main():
