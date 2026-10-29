@@ -1,0 +1,20 @@
+name: PMS 26 Live Reconciled
+on:
+  push:
+    paths:
+      - '.g11/pms26_live_oct29_request.txt'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run reconciled PMS 26 live probe
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_pms26_live_probe_oct29
