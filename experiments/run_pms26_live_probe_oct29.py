@@ -65,8 +65,18 @@ def main():
         move=ltp/b["close"]-1.0
         cur_value=b["base_value"]*(1.0+move)
         pnl=cur_value-b["base_value"]
-        ohlc=qd.get("ohlc") if isinstance(qd.get("ohlc"),dict) else {}
-        prev_day=float(ohlc.get("close")) if isinstance(ohlc.get("close"),(int,float)) else None
+        k=quote(resolved[s],safe="")
+        hurl=f"https://api.upstox.com/v3/historical-candle/{k}/days/1/2026-10-28/2026-10-27"
+        hdata=curl_json(hurl,token)
+        hc=((hdata.get("data") or {}).get("candles") or [])
+        prev_day=None
+        if hc:
+            valid=[]
+            for z in hc:
+                if isinstance(z,list) and len(z)>=5:
+                    zd=datetime.fromisoformat(str(z[0]).replace("Z","+00:00")).date()
+                    if zd.isoformat()<="2026-10-28": valid.append((zd,float(z[4])))
+            if valid: prev_day=max(valid,key=lambda x:x[0])[1]
         day_pnl=(b["qty"]*(ltp-prev_day)) if prev_day else None
         day_move=((ltp/prev_day-1.0)*100) if prev_day else None
         cur_eq+=cur_value
