@@ -1,1 +1,1 @@
-2026-10-29 rerun 26-stock PMS with current-day PnL
+2026-10-29 live PMS refresh vs official 28-Oct closes
