@@ -65,9 +65,13 @@ def main():
         move=ltp/b["close"]-1.0
         cur_value=b["base_value"]*(1.0+move)
         pnl=cur_value-b["base_value"]
+        ohlc=qd.get("ohlc") if isinstance(qd.get("ohlc"),dict) else {}
+        prev_day=float(ohlc.get("close")) if isinstance(ohlc.get("close"),(int,float)) else None
+        day_pnl=(b["qty"]*(ltp-prev_day)) if prev_day else None
+        day_move=((ltp/prev_day-1.0)*100) if prev_day else None
         cur_eq+=cur_value
-        rows_out.append({"symbol":s,"qty":b["qty"],"base_close_date":b["date"],"base_close":b["close"],"ltp":ltp,"move_pct":move*100,"base_value":b["base_value"],"current_value":cur_value,"pnl":pnl})
+        rows_out.append({"symbol":s,"qty":b["qty"],"base_close_date":b["date"],"base_close":b["close"],"ltp":ltp,"move_pct":move*100,"base_value":b["base_value"],"current_value":cur_value,"pnl":pnl,"prev_day_close":prev_day,"day_move_pct":day_move,"day_pnl":day_pnl})
     total=cur_eq+RESIDUAL
-    result={"source":"UPSTOX_AUTHENTICATED_RECONCILED_26","quote_timestamp":max(x.get("timestamp") for x in bytoken.values() if x.get("timestamp")),"holdings":26,"base_pms_value":PMS_TOTAL_BASE,"base_equity_value":base_eq,"residual_assumed_unchanged":RESIDUAL,"current_equity_value":cur_eq,"current_pms_value":total,"pms_change":total-PMS_TOTAL_BASE,"pms_change_pct":(total/PMS_TOTAL_BASE-1)*100,"breadth":{"up":sum(r["pnl"]>0 for r in rows_out),"down":sum(r["pnl"]<0 for r in rows_out),"flat":sum(r["pnl"]==0 for r in rows_out)},"simple_gain_vs_net_invested":total-NET_INVESTED,"simple_return_vs_net_invested_pct":(total/NET_INVESTED-1)*100,"rows":sorted(rows_out,key=lambda x:x["pnl"],reverse=True)}
+    result={"source":"UPSTOX_AUTHENTICATED_RECONCILED_26","quote_timestamp":max(x.get("timestamp") for x in bytoken.values() if x.get("timestamp")),"holdings":26,"base_pms_value":PMS_TOTAL_BASE,"base_equity_value":base_eq,"residual_assumed_unchanged":RESIDUAL,"current_equity_value":cur_eq,"current_pms_value":total,"pms_change":total-PMS_TOTAL_BASE,"pms_change_pct":(total/PMS_TOTAL_BASE-1)*100,"breadth_since_base":{"up":sum(r["pnl"]>0 for r in rows_out),"down":sum(r["pnl"]<0 for r in rows_out),"flat":sum(r["pnl"]==0 for r in rows_out)},"today_pnl":sum(r["day_pnl"] or 0 for r in rows_out),"today_return_pct":sum(r["day_pnl"] or 0 for r in rows_out)/sum((r["qty"]*(r["prev_day_close"] or r["ltp"])) for r in rows_out)*100,"today_breadth":{"up":sum((r["day_pnl"] or 0)>0 for r in rows_out),"down":sum((r["day_pnl"] or 0)<0 for r in rows_out),"flat":sum((r["day_pnl"] or 0)==0 for r in rows_out)},"simple_gain_vs_net_invested":total-NET_INVESTED,"simple_return_vs_net_invested_pct":(total/NET_INVESTED-1)*100,"rows":sorted(rows_out,key=lambda x:x["pnl"],reverse=True)}
     print("PMS26_LIVE_RESULT="+json.dumps(result,separators=(",",":"),sort_keys=True))
 if __name__=="__main__": main()
