@@ -2,7 +2,7 @@ name: PMS 26 Live Probe
 on:
   push:
     branches:
-      - experiment/upstox-readonly-data-service
+      - pms26-live-temp
     paths:
       - '.g11/pms26_live_request.txt'
 permissions:
