@@ -40,9 +40,11 @@ def main():
     rows=PublicInstrumentCatalog().nse_instruments()["records"]
     resolved={}
     for s in SNAP:
-        m=[r for r in rows if isinstance(r,dict) and r.get("exchange")=="NSE" and r.get("segment")=="NSE_EQ" and str(r.get("trading_symbol","")).upper()==s]
-        if len(m)!=1: raise RuntimeError(f"resolve {s}: {len(m)}")
-        resolved[s]=m[0]["instrument_key"]
+        m=[r for r in rows if isinstance(r,dict) and str(r.get("trading_symbol","")).upper()==s]
+        if not m: raise RuntimeError(f"resolve {s}: 0")
+        eq=[r for r in m if r.get("exchange")=="NSE" and r.get("segment")=="NSE_EQ"]
+        pick=eq[0] if eq else m[0]
+        resolved[s]=pick["instrument_key"]
 
     base={}
     with ThreadPoolExecutor(max_workers=8) as ex:
