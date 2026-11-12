@@ -1,0 +1,20 @@
+name: PMS Swing Scan
+on:
+  push:
+    paths:
+      - '.g11/pms_swing_scan_request.txt'
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Scan 26 PMS holdings for 3-7 day swing setups
+        env:
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
+        run: python -m experiments.run_pms_swing_scan
