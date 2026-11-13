@@ -4,34 +4,34 @@ from urllib.parse import urlencode, quote
 from experiments.upstox_catalog import PublicInstrumentCatalog
 
 SNAP={
-"BSE":{"value":328104.00,"cost":286876.23},
-"HCLTECH":{"value":290160.00,"cost":289991.95},
-"ICICIBANK":{"value":196450.00,"cost":173865.10},
-"PNB":{"value":193179.60,"cost":172245.89},
-"VBL":{"value":244578.60,"cost":238134.61},
-"AUROPHARMA":{"value":193715.00,"cost":170579.36},
-"BOSCHLTD":{"value":100980.00,"cost":91909.36},
-"HINDCOPPER":{"value":35780.69,"cost":34562.05},
-"INDHOTEL":{"value":242694.00,"cost":223121.73},
-"IPCALAB":{"value":174456.00,"cost":174550.39},
-"LTTS":{"value":114145.19,"cost":109074.94},
-"MEESHO":{"value":286872.96,"cost":240933.94},
-"SONACOMS":{"value":192400.00,"cost":169840.60},
-"ACUTAAS":{"value":188011.20,"cost":166839.60},
-"EBGNG":{"value":402616.50,"cost":481334.26},
-"JAYNECOIND":{"value":160365.72,"cost":178604.29},
-"JSWCEMENT":{"value":173105.54,"cost":165437.85},
-"KROSS":{"value":178222.79,"cost":173257.67},
-"LLOYDSENGG":{"value":431184.09,"cost":451287.08},
-"NELCO":{"value":69388.19,"cost":68410.33},
-"NEWGEN":{"value":164287.85,"cost":178796.04},
-"OMNI":{"value":79959.75,"cost":99754.64},
-"PINELABS":{"value":182842.00,"cost":176947.35},
-"SOUTHBANK":{"value":201815.48,"cost":175532.23},
-"STLTECH":{"value":362791.75,"cost":356332.54},
-"TATAELXSI":{"value":293740.00,"cost":262765.03}
+"BSE":{"value":328364.40,"cost":286876.23},
+"HCLTECH":{"value":287206.40,"cost":289991.95},
+"ICICIBANK":{"value":198750.00,"cost":173865.10},
+"PNB":{"value":197797.04,"cost":172245.89},
+"VBL":{"value":245340.00,"cost":238134.61},
+"AUROPHARMA":{"value":191563.20,"cost":170579.36},
+"BOSCHLTD":{"value":101000.00,"cost":91909.36},
+"HINDCOPPER":{"value":114214.39,"cost":113906.08},
+"INDHOTEL":{"value":245196.00,"cost":223121.73},
+"IPCALAB":{"value":170973.00,"cost":174550.39},
+"LTTS":{"value":115206.30,"cost":109074.94},
+"MEESHO":{"value":293751.15,"cost":240933.94},
+"SONACOMS":{"value":192608.00,"cost":169840.60},
+"ACUTAAS":{"value":191812.79,"cost":166839.60},
+"EBGNG":{"value":408872.75,"cost":481334.26},
+"JAYNECOIND":{"value":165443.64,"cost":178604.29},
+"JSWCEMENT":{"value":175253.85,"cost":165437.85},
+"KROSS":{"value":178663.79,"cost":173257.67},
+"LLOYDSENGG":{"value":432472.40,"cost":451287.08},
+"NELCO":{"value":67800.60,"cost":68410.33},
+"NEWGEN":{"value":164977.89,"cost":178796.04},
+"OMNI":{"value":79271.69,"cost":99754.64},
+"PINELABS":{"value":193490.00,"cost":176947.35},
+"SOUTHBANK":{"value":204686.16,"cost":175532.23},
+"STLTECH":{"value":366371.00,"cost":356332.54},
+"TATAELXSI":{"value":293512.00,"cost":262765.03}
 }
-PMS_BASE=5652995.12
+PMS_BASE=5696402.66
 NET_INVESTED=5050384.22
 BASE_EQ=sum(v["value"] for v in SNAP.values())
 RESIDUAL=PMS_BASE-BASE_EQ
@@ -49,10 +49,10 @@ def resolve(rows,s):
 
 def hist_close(key,token):
     k=quote(key,safe="")
-    u=f"https://api.upstox.com/v3/historical-candle/{k}/days/1/2026-11-11/2026-11-11"
+    u=f"https://api.upstox.com/v3/historical-candle/{k}/days/1/2026-11-12/2026-11-12"
     d=curl_json(u,token)
     cs=((d.get("data") or {}).get("candles") or [])
-    if not cs: raise RuntimeError("no 11-Nov candle")
+    if not cs: raise RuntimeError("no 12-Nov candle")
     return float(cs[0][4])
 
 def main():
@@ -87,7 +87,7 @@ def main():
 
     total=cur_eq+RESIDUAL
     result={
-      "source":"UPSTOX_AUTHENTICATED_11NOV_BASE_26",
+      "source":"UPSTOX_AUTHENTICATED_12NOV_PMS_BASE_26",
       "quote_timestamp":max(x.get("timestamp") for x in bytoken.values() if x.get("timestamp")),
       "holdings":26,
       "base_pms_value":PMS_BASE,
@@ -102,6 +102,5 @@ def main():
       "simple_return_vs_net_invested_pct":(total/NET_INVESTED-1)*100,
       "rows":sorted(out,key=lambda x:x["day_pnl"],reverse=True)
     }
-    print("PMS_LIVE_12NOV_RESULT="+json.dumps(result,separators=(",",":"),sort_keys=True))
-
+    print("PMS_LIVE_13NOV_RESULT="+json.dumps(result,separators=(",",":"),sort_keys=True))
 if __name__=="__main__": main()
